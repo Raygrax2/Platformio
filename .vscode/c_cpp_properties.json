@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "\"C:/Users/Santiago/.platformio/packages/framework-espidf/components/**\",",
+                "\"C:/Users/Santiago/.platformio/packages/toolchain-xtensa-esp32/**\",",
+                "\"C:/Users/Santiago/.platformio/packages/framework-espidf/components/newlib/include\",",
+                "\"C:/Users/Santiago/.platformio/packages/framework-espidf/components/freertos/include\",",
+                "\"C:/Users/Santiago/.platformio/packages/framework-espidf/components/esp32/include\""
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ]
+        }
+    ],
+    "version": 4
+}
