@@ -14,6 +14,9 @@
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE"
+            ],
+            "compileCommands": [
+                "${workspaceFolder}/LAB2CAYETANO/.pio/build/esp32dev/bootloader/compile_commands.json"
             ]
         }
     ],
