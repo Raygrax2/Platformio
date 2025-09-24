@@ -8,6 +8,11 @@
 #include "SimpleGPIO.h"
 #include "SimpleADC.h"
 #include "SimpleUART.h"
+#include "SimplePWM.h"
 #include "Filter.h"
 
-#endif // __DEFINITIONS_H__
+SimplePWM Square;
+
+
+
+#endif // __DEFINITONS_H__
