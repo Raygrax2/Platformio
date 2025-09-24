@@ -1,22 +1,21 @@
-#ifndef FILTER_H
-#define FILTER_H
+#ifndef _FILTER_H
+#define _FILTER_H
 
-#include <vector>
+#define MAX_NUM_SIZE 4 // Modify according to filter size
+#define MAX_DEN_SIZE 4 // Modify according to filter size
 
 class Filter
 {
 public:
     Filter();
-
-    // Setup with vectors of coefficients, this part was made with chatGPT
-    void setup(const std::vector<float>& a_coeff, const std::vector<float>& b_coeff);
-    float apply(float input, float &output);
+    ~Filter();
+    void setup(float b[], float a[], unsigned char num_coeff_b, unsigned char num_coeff_a, float x_init = 0, float y_init = 0);
+    float apply(float input_data);
 
 private:
-    std::vector<float> a; 
-    std::vector<float> b; 
-    std::vector<float> X; // input history
-    std::vector<float> Y; // output history
+    float *_b, *_a;
+    float _x[MAX_NUM_SIZE], _y[MAX_DEN_SIZE];
+    unsigned char _num_coeff[2];
 };
 
-#endif
+#endif // _FILTER_H
