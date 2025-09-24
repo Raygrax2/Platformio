@@ -9,6 +9,6 @@
 #include "SimpleADC.h"
 #include "SimpleUART.h"
 #include "SimpleI2C.h"
-
+#include "Filter.h"
 
 #endif // __DEFINITIONS_H__
