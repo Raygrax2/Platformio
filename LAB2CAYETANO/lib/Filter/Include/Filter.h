@@ -10,7 +10,7 @@ public:
 
     // Setup with vectors of coefficients, this part was made with chatGPT
     void setup(const std::vector<float>& a_coeff, const std::vector<float>& b_coeff);
-    void apply(float input, float &output);
+    float apply(float input, float &output);
 
 private:
     std::vector<float> a; 
