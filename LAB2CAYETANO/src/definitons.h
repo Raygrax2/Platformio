@@ -26,9 +26,17 @@ TimerConfig PWM_Time{
     .bit_resolution = LEDC_TIMER_14_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
+// PWM dedicado para reconstrucción (alta frecuencia)
+TimerConfig PWM_Recon_Time{
+    .timer = LEDC_TIMER_0,
+    .frequency = 70000,              // 20 kHz para facilitar filtrado RC (ajusta si quieres)
+    .bit_resolution = LEDC_TIMER_10_BIT,
+    .mode = LEDC_LOW_SPEED_MODE
+};
 
 // --- Objetos globales ---
 SimplePWM Square;
+SimplePWM Recon; // PWM para reconstrucción de señal (20 kHz)
 SimpleADC ADC;
 SimpleUART UART_RAW(115200);       // UART para enviar datos (raw + filtered)
 SimpleTimer timer;
@@ -36,13 +44,15 @@ SimpleTimer timer2;
 
 
 
+
 char Buffer[32];
 uint8_t len = 0;
 
-
+const uint8_t ReconPIN = 32;
 static const uint8_t ADC_pin = 25;
 static const uint8_t pinSquare = 17;
 static const uint8_t channelSquare = 0;
+const uint16_t channelRecon = 1; // Canal PWM para señal de reconstrucción
 
 // --- Filtros (objetos) ---
 Filter LPF;
