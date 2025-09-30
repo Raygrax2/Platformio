@@ -31,7 +31,7 @@ TimerConfig PWM_Recon_Time{
     .timer = LEDC_TIMER_0,
     .frequency = 70000,              // 20 kHz para facilitar filtrado RC (ajusta si quieres)
     .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
+    .mode = LEDC_HIGH_SPEED_MODE
 };
 
 // --- Objetos globales ---
