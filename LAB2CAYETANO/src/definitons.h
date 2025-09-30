@@ -36,12 +36,12 @@ SimpleTimer timer2;
 
 
 
-char Buffer[16];
+char Buffer[32];
 uint8_t len = 0;
 
 
-static const uint8_t ADC_pin = 24;
-static const uint8_t pinSquare = 18;
+static const uint8_t ADC_pin = 25;
+static const uint8_t pinSquare = 17;
 static const uint8_t channelSquare = 0;
 
 // --- Filtros (objetos) ---
@@ -55,11 +55,11 @@ static float a_LPF[3] = {1.0f, -1.3073f, 0.4918f};
 static float b_LPF[3] = {0.0461f, 0.0923f, 0.0461f};
 
 // High Pass Filter (IIR 2º orden)
-static float b_HPF[3] = {0.978030726982f, -1.956061453964f, 0.978030726982f};
-static float a_HPF[3] = {1.0f, -1.955578240315f, 0.956543676511f};
+static float b_HPF[3] = {1.0f, -2.0f, 1.0f};
+static float a_HPF[3] = {1.0f, -1.8055f, 0.8149f};
 
 // Moving Average filter (3 muestras)
-static float b_MA[3] = {0.3333f, 0.3333f, 0.3333f};
-static float a_MA[3] = {1.0f, 0.0f, 0.0f};
+static float b_MA[4] = {0.25f, 0.25f, 0.25f, 0.25f};
+static float a_MA[1] = {1.0f};
 
 #endif // __DEFINITIONS_H__
