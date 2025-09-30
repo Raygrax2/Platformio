@@ -35,7 +35,9 @@ SimpleTimer timer;
 SimpleTimer timer2;
 
 
+
 char Buffer[16];
+uint8_t len = 0;
 
 
 static const uint8_t ADC_pin = 24;
