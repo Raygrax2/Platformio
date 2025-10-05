@@ -17,14 +17,13 @@ Filter::~Filter() {}
 void Filter::setup(const float b_arr[], const float a_arr[], unsigned char num_coeff_b, unsigned char num_coeff_a,
                    float x_init, float y_init)
 {
-    // bounds check (truncates if larger than max)
+    
     unsigned char nb = std::min<unsigned char>(num_coeff_b, MAX_NUM_SIZE);
     unsigned char na = std::min<unsigned char>(num_coeff_a, MAX_DEN_SIZE);
 
     _num_coeff[0] = nb;
     _num_coeff[1] = na;
-
-    // copy coefficients (safe copy)
+    
     if (b_arr != nullptr)
         std::memcpy(_b, b_arr, nb * sizeof(float));
     else
