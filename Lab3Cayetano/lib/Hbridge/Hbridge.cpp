@@ -82,11 +82,11 @@ void HBridge::setSpeed(float pwm_signed_percentage)
     {
         // Reverse on B-side
         _ain0.set(0);
-        _ain1.set(0);
-        _bin0.set(1);
+        _ain1.set(1);
+        _bin0.set(0);
         _bin1.set(0);
 
-        _pwmA->setDuty(0.0f);
-        _pwmB->setDuty(abs_val);
+        _pwmA->setDuty(abs_val);
+        _pwmB->setDuty(0.0f);
     }
 }

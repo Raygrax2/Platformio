@@ -12,6 +12,8 @@ void BDCMotor::setup(const uint8_t in_pin[2], const uint8_t ch[2], TimerConfig m
 
 void BDCMotor::setSpeed(float Speed)
 {
+    //Scalate to consider treshold
+    
     if (Speed >= 0)
     {
         in[0].setDuty(Speed);

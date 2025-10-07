@@ -17,6 +17,7 @@
 #include "SimpleGPIO.h"
 #include "SimpleADC.h"
 #include "SimpleUART.h"
+#include "BDCMotor.h"
 #include "SimplePID.h"
 #include "SimplePWM.h"
 #include "Filter.h"
@@ -24,7 +25,7 @@
 // --- Timers para PWM ---
 TimerConfig PWM_TimerA{
     .timer = LEDC_TIMER_0,
-    .frequency = 1000,                 // Frecuencia PWM motor A (Hz)
+    .frequency = 20000,                 // Frecuencia PWM motor A (Hz)
     .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
@@ -39,7 +40,7 @@ TimerConfig PWM_TimerB{
 // --- Objetos globales ---
 QuadratureEncoder Encoder;
 SimpleTimer timer;
-HBridge motorDriver;
+BDCMotor motorA;
 SimplePWM pwmmotorA;
 SimplePWM pwmmotorB;  // Dummy (para compatibilidad con HBridge)
 
@@ -49,7 +50,8 @@ uint8_t len = 0;
 
 // --- Parámetros del encoder ---
 float Deg_per_edge = 360.0f / 2048.0f; // Grados por flanco
-uint8_t EncoderPIN[2] = {34, 36};      // Pines del encoder
+uint8_t EncoderPIN[2] = {34, 33};      // Pines del encoder
+SimplePID PID;
 
 // --- Pines del motor y puente H ---
 uint8_t motorPinA = 25; // PWM del motor A
@@ -57,12 +59,9 @@ uint8_t motorChannelA = 0;
 
 uint8_t Ain1Pin = 27; // AIN1
 uint8_t Ain2Pin = 26; // AIN2
-
-// --- Pines dummy del motor B (no usados) ---
-uint8_t motorPinB = 0;
-uint8_t motorChannelB = 1;
-uint8_t Bin1Pin = 0;
-uint8_t Bin2Pin = 0;
+uint8_t AIN[2] = {Ain1Pin, Ain2Pin};
+uint8_t CHA[2] = {0,1}; // BIN1 (dummy, no usado)
+SimpleUART UART(115200);
 
 // --- Filtros ---
 Filter LPF;

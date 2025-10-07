@@ -19,7 +19,7 @@ public:
     float apply(float setpoint, float measurement);
 
     // Devuelve el error (setpoint - measurement) — implementado como método público.
-    float get_error(float setpoint, float measurement) const;
+    float get_error(float setpoint, float measurement) { return (setpoint - measurement); }
 
 private:
     // parámetros

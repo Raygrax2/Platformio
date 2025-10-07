@@ -11,26 +11,31 @@ extern "C" void app_main()
     esp_task_wdt_deinit();
 
     // --- Inicialización de periféricos ---
-    Encoder.setup(EncoderPIN, Deg_per_edge);
+    Encoder.setup(EncoderPIN, 0.36445);
     timer.setup(timerinterrupt, "Timer");
-    timer.startPeriodic(20);  // 20 ms -> 50 Hz
-
-    // --- Configurar PWM motor A y dummy PWM B ---
-    pwmmotorA.setup(motorPinA, motorChannelA, &PWM_TimerA);
-    pwmmotorB.setup(motorPinB, motorChannelB, &PWM_TimerB);  // Dummy, sin efecto real
+    timer.startPeriodic(1000);                         // 20 ms -> 50 Hz
+    PID.setup(0.8f, 0.3f, 0.0f, 0.02f, -1.0f, 1.0f); // Kp, Ki, Kd, dt (s), outMin, outMax
 
     // --- Configurar puente H ---
-    motorDriver.setup(Ain1Pin, Ain2Pin, Bin1Pin, Bin2Pin, pwmmotorA, pwmmotorB, 1.0f);
-
+    motorA.setup(AIN, CHA, PWM_TimerA); // Usamos solo A-side
     // --- Bucle principal ---
+    float speed = 0;
+    float duty = 0;
+    float desired = 0;
     while (1)
     {
-        // Girar en un sentido
-        motorDriver.setSpeed(75.0f);
-
-        
-
-       
-        
+        if (timer.interruptAvailable())
+        {
+            printf("%.2f, %.2f\n", speed,Encoder.getAngle());
+            len = UART.available();
+            speed = Encoder.getSpeed();
+            if (len)
+            {
+                UART.read(Buffer, len);
+                sscanf(Buffer, "%f\n", &duty);
+                motorA.setSpeed(duty); // 50% velocidad adelante
+            }
+            // out_PID = PID.apply(desired,speed); // setpoint 100 deg/s
+        }
     }
 }

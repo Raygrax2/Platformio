@@ -88,12 +88,13 @@ float SimplePID::apply(float setpoint, float measurement)
         }
     }
     // else: keep old _I (no integration)
+    float Integ = _Ki*_I
 
     // save for next cycle
     _prevError = error;
 
     // recompute final output with accepted integrator
-    float output = _Kp * error + _Ki * _I + D;
+    float output = _Kp * error + Integ + D;
     output = std::clamp(output, _outMin, _outMax);
 
     return output;
