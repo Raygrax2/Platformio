@@ -26,6 +26,7 @@ extern "C" void app_main()
     {
         if (timer.interruptAvailable())
         {
+            
             printf("%.2f, %.2f\n", speed,Encoder.getAngle());
             len = UART.available();
             speed = Encoder.getSpeed();

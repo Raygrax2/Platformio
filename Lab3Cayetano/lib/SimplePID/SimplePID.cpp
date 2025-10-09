@@ -20,15 +20,11 @@ void SimplePID::setup(float Kp, float Ki, float Kd, float dt, float outMin, floa
     _firstCycle = true;
 }
 
-float SimplePID::get_error(float setpoint, float measurement) const
-{
-    return setpoint - measurement;
-}
 
 float SimplePID::apply(float setpoint, float measurement)
 {
     // compute error via public method (as requested)
-    float error = get_error(setpoint, measurement);
+    float error = setpoint - measurement;
 
     // Proportional
     float P = _Kp * error;
@@ -88,14 +84,13 @@ float SimplePID::apply(float setpoint, float measurement)
         }
     }
     // else: keep old _I (no integration)
-    float Integ = _Ki*_I
+    float Integ = _Ki*_I;
 
     // save for next cycle
     _prevError = error;
 
     // recompute final output with accepted integrator
     float output = _Kp * error + Integ + D;
-    output = std::clamp(output, _outMin, _outMax);
 
     return output;
 }
