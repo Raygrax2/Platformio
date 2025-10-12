@@ -18,10 +18,9 @@ extern "C" void app_main()
     timer2.startPeriodic(20);
     timer.setup(timerinterrupt, "Timer1");
     timer.startPeriodic(10000);
-    ADC.setup(ADC_pin);
     Square.setup(pinSquare, channelSquare, &PWM_Time, false);
     Square.setFrequency(4); // 4 Hz
-    Square.setDuty(50.0f);  // duty 50% (valor entre 0.0 y 1.0)
+    Square.setDuty(50.0f);  // duty 50% 
     Recon.setup(ReconPIN, channelRecon, &PWM_Recon_Time, false);
     Recon.setDuty(0); // duty 0% (valor entre 0.0 y 1.0)
     

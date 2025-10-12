@@ -22,7 +22,13 @@
 #include "SimplePWM.h"
 #include "Filter.h"
 
+enum ControlMode {
+    MODE_MANUAL_PWM = 0,    // Direct PWM control
+    MODE_SPEED = 1,         // Speed control with PID
+    MODE_POSITION = 2       // Position control with PID
+};
 // --- Timers para PWM ---
+
 TimerConfig PWM_TimerA{
     .timer = LEDC_TIMER_0,
     .frequency = 20000,                 // Frecuencia PWM motor A (Hz)
@@ -42,7 +48,6 @@ QuadratureEncoder Encoder;
 SimpleTimer timer;
 BDCMotor motorA;
 SimplePWM pwmmotorA;
-SimplePWM pwmmotorB;  // Dummy (para compatibilidad con HBridge)
 
 // --- Buffers UART o debug ---
 char Buffer[32];
@@ -65,5 +70,7 @@ SimpleUART UART(115200);
 
 // --- Filtros ---
 Filter LPF;
+float LPF_coeffs_a[2] = {1.0f, -0.4636f};  // [a0, a1] where a0 = 1
+float LPF_coeffs_b[2] = {0.2682f, 0.2682f}; // [b0, b1]
 
 #endif // __DEFINITIONS_H__
