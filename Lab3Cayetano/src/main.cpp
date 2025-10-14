@@ -81,10 +81,6 @@ extern "C" void app_main()
                 // keep value in range -100..100
                 float setpoint = desired;
                 duty_percent = setpoint;
-                if (duty_percent > 100.0f)
-                    duty_percent = 100.0f;
-                if (duty_percent < -100.0f)
-                    duty_percent = -100.0f;
 
                 // normalize for motor API (-1..1)
                 motorA.setSpeed(duty_percent);
@@ -101,7 +97,7 @@ extern "C" void app_main()
 
                 // Convert to percentage for logging
                 duty_norm = out_PID;
-                duty_percent = duty_norm * 100.0f;
+                duty_percent = duty_norm;
 
                 // Send to motor
                 motorA.setSpeed(duty_percent);
@@ -115,11 +111,7 @@ extern "C" void app_main()
                 error = setpoint - current_position;
                 out_PID = PID.apply(setpoint, current_position);
 
-                // Treat PID output as duty in -1..1 (simplified single-loop position control)
-                if (out_PID > 1.0f)
-                    out_PID = 1.0f;
-                if (out_PID < -1.0f)
-                    out_PID = -1.0f;
+            
 
                 duty_norm = out_PID;
                 duty_percent = duty_norm * 100.0f;
