@@ -55,12 +55,8 @@ uint8_t len = 0;
 
 // --- Parámetros del encoder ---
 float Deg_per_edge = 360.0f / 2048.0f; // Grados por flanco
-uint8_t EncoderPIN[2] = {34, 33};      // Pines del encoder
+uint8_t EncoderPIN[2] = {32, 35};      // Pines del encoder
 SimplePID PID;
-
-// --- Pines del motor y puente H ---
-uint8_t motorPinA = 25; // PWM del motor A
-uint8_t motorChannelA = 0;
 
 uint8_t Ain1Pin = 27; // AIN1
 uint8_t Ain2Pin = 26; // AIN2
