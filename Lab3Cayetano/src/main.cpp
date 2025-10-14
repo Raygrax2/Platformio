@@ -24,7 +24,7 @@ extern "C" void app_main()
         // Local working vars
         float duty_percent = 0.0f; // duty to send to motor in percent [-100..100]
         float duty_norm = 0.0f;    // normalized duty for motorA.setSpeed() [-1..1]
-        float control_output = 0.0f;
+        
         float out_PID = 0.0f;
         float error = 0.0f;
         float setpoint = 0.0f; // desired value, interpreted according to mode
@@ -61,7 +61,6 @@ extern "C" void app_main()
                     // Desired: interpreted according to Mode
                     int parsedMode = -1;
                     float desired = 0.0f;
-                    float pK = Kp, pI = Ki, pD = Kd;
 
                     // Try to parse 5 fields; tolerate missing gain fields
                     int n = sscanf(rxbuf, "%d,%f,%f,%f,%f", &parsedMode, &desired, &Kp, &Ki, &Kd);
@@ -103,12 +102,7 @@ extern "C" void app_main()
                     error = setpoint - speed_filtered;
                     out_PID = PID.apply(setpoint, speed_filtered);
 
-                    // PID output assumed to be normalized duty in -1..1; if not, tune gains accordingly.
-                    // Clamp out_PID to [-1, 1]
-                    if (out_PID > 1.0f)
-                        out_PID = 1.0f;
-                    if (out_PID < -1.0f)
-                        out_PID = -1.0f;
+                    
 
                     // Convert to percentage for logging
                     duty_norm = out_PID;

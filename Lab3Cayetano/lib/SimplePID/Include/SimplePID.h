@@ -12,7 +12,7 @@ public:
     // Configura Kp, Ki, Kd, periodo dt (segundos) y límites de salida [outMin, outMax].
     // dt debe ser > 0 (se valida en setup).
     void setup(float Kp, float Ki, float Kd, float dt = 0.01f,
-               float outMin = -1e6f, float outMax = 1e6f);
+               float outMin = 100.0f, float outMax = 100.0f);
 
     // Calcula y devuelve la salida del PID usando setpoint y measurement.
     // apply() llama internamente a get_error().

@@ -23,7 +23,7 @@ void SimplePID::setup(float Kp, float Ki, float Kd, float dt, float outMin, floa
 
 float SimplePID::apply(float setpoint, float measurement)
 {
-    // compute error via public method (as requested)
+    
     float error = setpoint - measurement;
 
     // Proportional
