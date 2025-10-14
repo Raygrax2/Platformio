@@ -1,173 +1,165 @@
 #include "definitons.h"
-
-// ---- Globals (accessible from parseCommand) ----
-ControlMode current_mode = MODE_MANUAL_PWM;
-float setpoint = 0.0f;         // Desired value (PWM duty, speed (deg/s), or position (deg))
-float manual_duty = 0.0f;      // Manual PWM duty cycle (-1..1 assumed)
-float speed_filtered = 0.0f;   // Filtered speed measurement
-float current_position = 0.0f; // Current angular position (deg)
-float speed_raw = 0.0f;
-
-float Kp = 1.0f, Ki = 0.1f, Kd = 0.05f; // PID params (updated via UART/LabVIEW)
-bool pid_needs_reconfigure = true;      // flag to reconfigure PID after coef change
-
-// Hysteresis thresholds (if needed)
-float speed_threshold_high = 1000.0f;
-float speed_threshold_low  = -1000.0f;
-
-// direct/manual duty
-float manual_duty_limit = 1.0f;
-
-// Temporary buffer for parsing
-char Buffer[64];
-static void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt(); }
-// Forward declaration
-void parseCommand(char* buffer);
-
-// Parse simple CSV-style commands from LabVIEW/host.
-// Format examples:
-//  M,0        -> mode 0 (manual PWM), 1 -> speed, 2 -> position
-//  P,1.2,0.05,0.01 -> set PID Kp,Ki,Kd (affects current mode's PID next reconfigure)
-//  S,123.4    -> setpoint (interpreted according to current mode)
-//  H,high,low -> hysteresis thresholds
-//  D,0.5      -> direct duty (manual mode)
-void parseCommand(char* buffer)
-{
-    char cmd = buffer[0];
-
-    switch(cmd) {
-        case 'M': case 'm': {
-            int mode;
-            if (sscanf(buffer, "%*c,%d", &mode) == 1) {
-                if (mode >= 0 && mode <= 2) {
-                    current_mode = (ControlMode)mode;
-                    setpoint = 0.0f;             // reset setpoint on mode change
-                    pid_needs_reconfigure = true;
-                    //PID.reset();
-                }
-            }
-            break;
-        }
-        case 'P': case 'p': {
-            float kp, ki, kd;
-            if (sscanf(buffer, "%*c,%f,%f,%f", &kp, &ki, &kd) == 3) {
-                Kp = kp; Ki = ki; Kd = kd;
-                pid_needs_reconfigure = true;
-            }
-            break;
-        }
-        case 'S': case 's': {
-            float sp;
-            if (sscanf(buffer, "%*c,%f", &sp) == 1) {
-                setpoint = sp;
-            }
-            break;
-        }
-        case 'H': case 'h': {
-            float high, low;
-            if (sscanf(buffer, "%*c,%f,%f", &high, &low) == 2) {
-                speed_threshold_high = high;
-                speed_threshold_low  = low;
-            }
-            break;
-        }
-        case 'D': case 'd': {
-            float duty;
-            if (sscanf(buffer, "%*c,%f", &duty) == 1) {
-                manual_duty = duty;
-            }
-            break;
-        }
-        default:
-            // ignore
-            break;
-    }
-}
+static void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt();}
 
 extern "C" void app_main()
 {
-    // Deinit watchdog for testing (as in your snippet)
+    // Deinit watchdog (for testing)
     esp_task_wdt_deinit();
 
-    // --- Setup hardware / modules ---
-    Encoder.setup(EncoderPIN, Deg_per_edge);         // encoder scale: degrees per edge
-    timer.setup(timerinterrupt, "Timer");
-    timer.startPeriodic(1000); // keep your period value (user used 1000)
-    LPF.setup(LPF_coeffs_b, LPF_coeffs_a, 2, 2);    // keep your existing LPF setup call
-    motorA.setup(AIN, CHA, PWM_TimerA);             // motor A setup
+        timer.setInterrupt();                    // --- Setup hardware / modules ---
+        Encoder.setup(EncoderPIN, 0.36445); // encoder scale: degrees per edge
+        timer.setup(timerinterrupt, "Timer");
+        timer.startPeriodic(20);                     // 20 ms loop -> 50 Hz main loop (adjust as needed)
+        LPF.setup(LPF_coeffs_b, LPF_coeffs_a, 2, 2); // LPF to smooth speed
+        motorA.setup(AIN, CHA, PWM_TimerA);          // motor A setup
 
+        // PID initial configure (dt in seconds).
+        float dt = 0.02f;  // 20 ms (consistent with timer period)
+        float Kp = 0.1f;   // initial proportional gain
+        float Ki = 0.01f;  // initial integral gain
+        float Kd = 0.005f; // initial derivative gain
 
-    // PID initial configure (dt in seconds). We'll reconfigure when coefficients change.
-    const float dt = 0.02f; // your previous comment used 20 ms
-    PID.setup(Kp, Ki, Kd, dt);
+        PID.setup(Kp, Ki, Kd, dt); // initial configuration
 
-    // Local working vars
-    float duty = 0.0f;
-    float control_output = 0.0f;
-    float out_PID = 0.0f;
+        // Local working vars
+        float duty_percent = 0.0f; // duty to send to motor in percent [-100..100]
+        float duty_norm = 0.0f;    // normalized duty for motorA.setSpeed() [-1..1]
+        float control_output = 0.0f;
+        float out_PID = 0.0f;
+        float error = 0.0f;
+        float setpoint = 0.0f; // desired value, interpreted according to mode
+        float desired = 0.0f;  // from UART, interpreted according to mode
+        float speed_raw = 0.0f;
+        float speed_filtered = 0.0f;
+        float current_position = 0.0f; // in degrees
+        int current_mode = MODE_MANUAL_PWM; // default mode
 
-    // Main loop: respond to periodic timer
-    while (1)
-    {
-        if (timer.interruptAvailable())
+        // Local receive buffer (do not shadow global Buffer in definitions.h)
+        char rxbuf[64];
+
+        while (1)
         {
-            
-            
-            // 1) Read sensors
-            speed_raw = Encoder.getSpeed();        // e.g. deg/s
-            current_position = Encoder.getAngle(); // degrees
+            if (timer.interruptAvailable())
+            {
+                // --- 1) Read sensors ---
+                speed_raw = Encoder.getSpeed();        // deg/s
+                current_position = Encoder.getAngle(); // deg
 
-            // 2) Apply filter to raw speed (sample-by-sample)
-            speed_filtered = LPF.apply(speed_raw);
+                // --- 2) Apply filter to raw speed (sample-by-sample) ---
+                speed_filtered = LPF.apply(speed_raw);
 
-            // 3) Handle UART / LabVIEW commands (non-blocking)
-            uint8_t available = UART.available();
-            if (available > 0) {
-                if (available >= sizeof(Buffer)) available = sizeof(Buffer)-1;
-                UART.read(Buffer, available);
-                Buffer[available] = '\0'; // null-term
-                parseCommand(Buffer);
-            }
+                // --- 3) Read UART / LabVIEW buffer (non-blocking) ---
+                uint8_t available = UART.available();
+                if (available)
+                {
+                    
+                    UART.read(rxbuf, available);
+                    rxbuf[available] = '\0';
 
-            // 4) If PID coefficients changed, reconfigure PID
-            if (pid_needs_reconfigure) {
-                PID.setup(Kp, Ki, Kd, dt);
-                //PID.reset();
-                pid_needs_reconfigure = false;
-            }
+                    // Expecting CSV: Mode,Desired,Kp,Ki,Kd
+                    // Mode: integer (0=PWM,1=Speed,2=Position)
+                    // Desired: interpreted according to Mode
+                    int parsedMode = -1;
+                    float desired = 0.0f;
+                    float pK = Kp, pI = Ki, pD = Kd;
 
-            // 5) Mode-dependent control
-            switch (current_mode) {
+                    // Try to parse 5 fields; tolerate missing gain fields
+                    int n = sscanf(rxbuf, "%d,%f,%f,%f,%f", &parsedMode, &desired, &Kp, &Ki, &Kd);
+
+                    
+                    // As requested, always reconfigure PID with the (possibly new) gains.
+                    PID.setup(Kp, Ki, Kd, dt);
+                }
+                else
+                {
+                    // Even if no UART input, reconfigure PID as requested (inefficient but required)
+                    PID.setup(Kp, Ki, Kd, dt);
+                }
+
+                // --- 4) Mode-dependent control logic ---
+                switch (current_mode)
+                {
                 case MODE_MANUAL_PWM:
-                    // direct duty command from LabVIEW
-                    control_output = manual_duty;
+                {
+                    // setpoint interpreted as desired duty percentage [0..100] or [-100..100]
+                    // keep value in range -100..100
+                    float setpoint = desired; 
+                    duty_percent = setpoint;
+                    if (duty_percent > 100.0f)
+                        duty_percent = 100.0f;
+                    if (duty_percent < -100.0f)
+                        duty_percent = -100.0f;
+
+                    // normalize for motor API (-1..1)
+                    motorA.setSpeed(duty_percent);
+                    error = 0.0f; // no error concept in manual PWM
                     break;
+                }
 
                 case MODE_SPEED:
-                    // PID controller: setpoint is in same units as getSpeed() (deg/s)
+                {
+                    // setpoint is desired speed in deg/s
+                    // PID input: setpoint (deg/s) and measured value speed_filtered (deg/s)
+                    error = setpoint - speed_filtered;
                     out_PID = PID.apply(setpoint, speed_filtered);
-                    control_output = out_PID;
+
+                    // PID output assumed to be normalized duty in -1..1; if not, tune gains accordingly.
+                    // Clamp out_PID to [-1, 1]
+                    if (out_PID > 1.0f)
+                        out_PID = 1.0f;
+                    if (out_PID < -1.0f)
+                        out_PID = -1.0f;
+
+                    // Convert to percentage for logging
+                    duty_norm = out_PID;
+                    duty_percent = duty_norm * 100.0f;
+
+                    // Send to motor
+                    motorA.setSpeed(duty_percent);
                     break;
+                }
 
                 case MODE_POSITION:
-                    // Position PID: setpoint is angle (deg); controller output is velocity/speed command
+                {
+                    // setpoint is desired position in degrees
+                    // PID input: setpoint (deg) and measured value current_position (deg)
+                    error = setpoint - current_position;
                     out_PID = PID.apply(setpoint, current_position);
-                    // Option 1: treat out_PID as direct PWM duty
-                    // Option 2: saturate and/or cascade to a speed loop. We'll simply map to PWM duty for now.
-                    control_output = out_PID;
+
+                    // Treat PID output as duty in -1..1 (simplified single-loop position control)
+                    if (out_PID > 1.0f)
+                        out_PID = 1.0f;
+                    if (out_PID < -1.0f)
+                        out_PID = -1.0f;
+
+                    duty_norm = out_PID;
+                    duty_percent = duty_norm * 100.0f;
+
+                    // Actuate motor
+                    motorA.setSpeed(duty_percent);
                     break;
-            }
+                }
 
-            // 6) Clamp control_output (assume duty in [-1, 1])
-            if (control_output > 1.0f) control_output = 1.0f;
-            if (control_output < -1.0f) control_output = -1.0f;
+                default:
+                {
+                    // Unknown mode: stop motor for safety
+                    duty_norm = 0.0f;
+                    duty_percent = 0.0f;
+                    motorA.setSpeed(0.0f);
+                    error = 0.0f;
+                    break;
+                }
+                } // end switch(current_mode)
 
-            // 7) Send to motor (assuming setSpeed expects duty in -1..1)
-            motorA.setSpeed(control_output);
+                // --- 5) Prepare telemetry for LabVIEW: error, position, speed (deg/s) ---
+                // Send CSV: error,position,speed,duty_percent,mode
+                // Example line: "1.23,45.67,100.32,12.34,1\n"
+                printf("%.3f,%.3f,%.3f,\n",
+                       error,
+                       current_position,
+                       speed_filtered);
 
-            // 8) Optional: Debug print (prints angle and raw speed as you had)
-            printf("mode:%d set:%.2f pos:%.2f sp_raw:%.2f sp_filt:%.2f duty:%.3f\n",
-                   (int)current_mode, setpoint, current_position, speed_raw, speed_filtered, control_output);
-        } // end timer interrupt handler
-    } // end while(1)
-}
+            } // end if(timer.interruptAvailable())
+
+        } // end while(1)
+    } // end app_main
