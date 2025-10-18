@@ -11,9 +11,10 @@ extern "C" void app_main()
     float filteredValue = 0.0;
     timer.setup(timerInterrupt, "Timer1");
     timer.startPeriodic(1000);
+    //Setups
+    motor1.setup();
     while(1)
     {
-        
         if (timer.interruptAvailable())
         {
            

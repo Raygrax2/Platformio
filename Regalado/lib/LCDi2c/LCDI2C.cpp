@@ -1,138 +1,216 @@
 #include "LCDI2C.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "rom/ets_sys.h" // ets_delay_us
+#include "esp_err.h"
+#include <cstring>
 
-// Typical PCF8574 bit mapping - adjust if your board differs
-#define LCD_MASK_RS        0x01 // P0
-#define LCD_MASK_RW        0x02 // P1
-#define LCD_MASK_EN        0x04 // P2
-#define LCD_MASK_BACKLIGHT 0x08 // P3
-// P4..P7 -> DB4..DB7
+static const char *TAG = "LCDI2C";
 
-LCDI2C::LCDI2C()
-    : _addr(0x27), _cols(16), _rows(2), _backlight_flag(LCD_MASK_BACKLIGHT)
+LCDI2C::LCDI2C(SimpleI2C &i2c, uint8_t lcd_addr, uint8_t lcd_cols, uint8_t lcd_rows)
+    : _i2c(i2c), _Addr(lcd_addr), _cols(lcd_cols), _rows(lcd_rows),
+      _backlightval(LCD_NOBACKLIGHT), _displayfunction(0),
+      _displaycontrol(0), _displaymode(0), _numlines(0)
 {
 }
 
-void LCDI2C::setup(uint8_t device_address, uint32_t freq, uint8_t sda_pin, uint8_t scl_pin, i2c_port_t i2c_num)
-{
-    _addr = device_address;
-    // initialize underlying I2C device using your SimpleI2C API
-    // SimpleI2C::setup expects device_address as first param per your header
-    i2c.setup(device_address, freq, sda_pin, scl_pin, i2c_num);
+void LCDI2C::init() {
+    begin(_cols, _rows);
+}
 
-    ESP_LOGI(TAG, "LCDI2C: init addr=0x%02X, sda=%u scl=%u freq=%u", device_address, sda_pin, scl_pin, (unsigned)freq);
+void LCDI2C::begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
+    _cols = cols;
+    if (lines > 1) _displayfunction |= LCD_2LINE; else _displayfunction |= LCD_1LINE;
+    _numlines = lines;
 
-    // Wait for LCD to power up (>40ms)
+    if ((dotsize != 0) && (lines == 1)) _displayfunction |= LCD_5x10DOTS;
+    else _displayfunction |= LCD_5x8DOTS;
+
+    // wait after power up
     vTaskDelay(pdMS_TO_TICKS(50));
 
-    // Initialize to 4-bit mode:
-    // Per HD44780 init procedure: send 0x03 three times, then 0x02
-    write4bits(0x03, 0); vTaskDelay(pdMS_TO_TICKS(5));  // >4.1ms
-    write4bits(0x03, 0); vTaskDelay(pdMS_TO_TICKS(5));  // >4.1ms
-    write4bits(0x03, 0); vTaskDelay(pdMS_TO_TICKS(1));
-    write4bits(0x02, 0); // set 4-bit mode
+    // Reset expander and backlight (write current backlight)
+    expanderWrite(_backlightval);
+    vTaskDelay(pdMS_TO_TICKS(10));
 
-    // Function set: 4-bit, 2 lines, 5x8 dots
-    command(0x28);
+    // Initialization to 4-bit mode (per HD44780)
+    write4bits(0x03 << 4);
+    delayMicroseconds(4500);
 
-    // Display control: display on, cursor off, blink off
-    command(0x0C);
+    write4bits(0x03 << 4);
+    delayMicroseconds(4500);
 
-    // Clear display
+    write4bits(0x03 << 4);
+    delayMicroseconds(150);
+
+    write4bits(0x02 << 4); // 4-bit mode
+    delayMicroseconds(150);
+
+    // function set
+    command(LCD_FUNCTIONSET | _displayfunction);
+
+    // display on, no cursor, no blink
+    _displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+    display();
+
+    // clear and set entry mode
     clear();
+    _displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
+    command(LCD_ENTRYMODESET | _displaymode);
 
-    // Entry mode: cursor increments, no shift
-    command(0x06);
-
-    // keep backlight as previously set
-    backlightOn();
+    home();
 }
 
-void LCDI2C::clear()
-{
-    command(0x01);
-    vTaskDelay(pdMS_TO_TICKS(2)); // clear command > 1.52ms
+void LCDI2C::clear() {
+    command(LCD_CLEARDISPLAY);
+    // clear needs >1.52ms
+    vTaskDelay(pdMS_TO_TICKS(2));
+    if (_oled) setCursor(0,0);
 }
 
-void LCDI2C::home()
-{
-    command(0x02);
+void LCDI2C::home() {
+    command(LCD_RETURNHOME);
     vTaskDelay(pdMS_TO_TICKS(2));
 }
 
-void LCDI2C::setCursor(uint8_t col, uint8_t row)
-{
+void LCDI2C::setCursor(uint8_t col, uint8_t row) {
     static const uint8_t row_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
-    if (row >= _rows) row = _rows - 1;
-    uint8_t addr = col + row_offsets[row];
-    command(0x80 | addr);
+    if (row >= _numlines) row = _numlines - 1;
+    command(LCD_SETDDRAMADDR | (col + row_offsets[row]));
 }
 
-void LCDI2C::print(const char* str)
-{
-    while (str && *str) {
-        writeChar(*str++);
+void LCDI2C::noDisplay() {
+    _displaycontrol &= ~LCD_DISPLAYON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::display() {
+    _displaycontrol |= LCD_DISPLAYON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::noCursor() {
+    _displaycontrol &= ~LCD_CURSORON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::cursor() {
+    _displaycontrol |= LCD_CURSORON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::noBlink() {
+    _displaycontrol &= ~LCD_BLINKON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::blink() {
+    _displaycontrol |= LCD_BLINKON;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+}
+
+void LCDI2C::scrollDisplayLeft() {
+    command(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
+}
+
+void LCDI2C::scrollDisplayRight() {
+    command(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
+}
+
+void LCDI2C::leftToRight() {
+    _displaymode |= LCD_ENTRYLEFT;
+    command(LCD_ENTRYMODESET | _displaymode);
+}
+
+void LCDI2C::rightToLeft() {
+    _displaymode &= ~LCD_ENTRYLEFT;
+    command(LCD_ENTRYMODESET | _displaymode);
+}
+
+void LCDI2C::autoscroll() {
+    _displaymode |= LCD_ENTRYSHIFTINCREMENT;
+    command(LCD_ENTRYMODESET | _displaymode);
+}
+
+void LCDI2C::noAutoscroll() {
+    _displaymode &= ~LCD_ENTRYSHIFTINCREMENT;
+    command(LCD_ENTRYMODESET | _displaymode);
+}
+
+void LCDI2C::createChar(uint8_t location, const uint8_t charmap[8]) {
+    location &= 0x7;
+    command(LCD_SETCGRAMADDR | (location << 3));
+    for (int i = 0; i < 8; ++i) {
+        write(charmap[i]);
     }
 }
 
-void LCDI2C::backlightOn()
-{
-    _backlight_flag = LCD_MASK_BACKLIGHT;
-    // write a no-op to update the state
-    pcfWrite(_backlight_flag);
+void LCDI2C::noBacklight() {
+    _backlightval = LCD_NOBACKLIGHT;
+    expanderWrite(0);
 }
 
-void LCDI2C::backlightOff()
-{
-    _backlight_flag = 0;
-    pcfWrite(0);
+void LCDI2C::backlight() {
+    _backlightval = LCD_BACKLIGHT;
+    expanderWrite(0);
 }
 
-void LCDI2C::command(uint8_t value)
-{
-    send(value, false);
+void LCDI2C::setBacklight(uint8_t value) {
+    if (value) backlight(); else noBacklight();
 }
 
-void LCDI2C::writeChar(char c)
-{
-    send((uint8_t)c, true);
+size_t LCDI2C::write(uint8_t value) {
+    send(value, Rs);
+    return 1;
 }
 
-/*** low-level helpers ***/
-void LCDI2C::send(uint8_t value, bool isData)
-{
-    uint8_t flags = _backlight_flag | (isData ? LCD_MASK_RS : 0);
-    // high nibble
-    write4bits((value >> 4) & 0x0F, flags);
-    // low nibble
-    write4bits(value & 0x0F, flags);
+size_t LCDI2C::print(const char *str) {
+    size_t count = 0;
+    if (!str) return 0;
+    while (*str) {
+        write(static_cast<uint8_t>(*str++));
+        ++count;
+    }
+    return count;
 }
 
-void LCDI2C::write4bits(uint8_t nibble, uint8_t flags)
-{
-    // map nibble to P4..P7 (shift left 4)
-    uint8_t data = (nibble << 4) | flags;
-    pcfWrite(data);
-    pulseEnable(data);
+size_t LCDI2C::print(const std::string &s) {
+    return print(s.c_str());
 }
 
-void LCDI2C::pulseEnable(uint8_t data)
-{
-    // EN high
-    pcfWrite(data | LCD_MASK_EN);
-    // small delay to latch (1ms is safe; you may reduce to microseconds)
-    vTaskDelay(pdMS_TO_TICKS(1));
-    // EN low
-    pcfWrite(data & ~LCD_MASK_EN);
-    vTaskDelay(pdMS_TO_TICKS(1));
+void LCDI2C::command(uint8_t value) {
+    send(value, 0);
 }
 
-void LCDI2C::pcfWrite(uint8_t data)
-{
-    // SimpleI2C::write signature: void write(uint8_t data_in[], size_t size_in);
-    // prepare a one-byte buffer and send. SimpleI2C internally knows the device address (per setup()).
-    uint8_t buf[1] = { data };
-    i2c.write(buf, 1);
+// low-level send
+void LCDI2C::send(uint8_t value, uint8_t mode) {
+    uint8_t highnib = value & 0xF0;
+    uint8_t lownib = (value << 4) & 0xF0;
+    write4bits(highnib | mode);
+    write4bits(lownib | mode);
+}
 
-    // tiny yield; optional
-    taskYIELD();
+void LCDI2C::write4bits(uint8_t value) {
+    expanderWrite(value);
+    pulseEnable(value);
+}
+
+void LCDI2C::expanderWrite(uint8_t data) {
+    uint8_t out = data | _backlightval;
+    esp_err_t err = _i2c.write(&out, 1);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "I2C write failed: %s", esp_err_to_name(err));
+    }
+}
+
+void LCDI2C::pulseEnable(uint8_t data) {
+    expanderWrite(data | En);
+    delayMicroseconds(1);
+    expanderWrite(data & ~En);
+    delayMicroseconds(50);
+}
+
+void LCDI2C::delayMicroseconds(uint32_t us) {
+    ets_delay_us(us);
 }
