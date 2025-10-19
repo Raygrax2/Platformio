@@ -1,12 +1,11 @@
 #include "Joystick.h"
 
 // Constructor with default pins
-Joystick::Joystick(gpio_num_t xPin, gpio_num_t yPin, gpio_num_t buttonPin)
-    : pinX(xPin), pinY(yPin), pinButton(buttonPin),
-      minX(4095), minY(4095), maxX(0), maxY(0),
-      lastX(0), lastY(0) { }
+Joystick::Joystick(){}
 
-void Joystick::setup() {
+void Joystick::setup(uint8_t xPin ,
+                     uint8_t yPin ,
+                     uint8_t buttonPin) :{
     // Setup ADC and GPIO objects
     adcX.setup(pinX);
     adcY.setup(pinY);
