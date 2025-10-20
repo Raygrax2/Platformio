@@ -66,7 +66,7 @@ SimpleUART UART(115200);
 
 // --- Filtros ---
 Filter LPF;
-float LPF_coeffs_a[2] = {1.0f, -0.4636f};  // [a0, a1] where a0 = 1
-float LPF_coeffs_b[2] = {0.2682f, 0.2682f}; // [b0, b1]
+float LPF_coeffs_a[2] ={1.0000f, -0.7608f} ;  // [a0, a1] where a0 = 1
+float LPF_coeffs_b[2] = {0.1196f, 0.1196f}; // [b0, b1]
 
 #endif // __DEFINITIONS_H__
