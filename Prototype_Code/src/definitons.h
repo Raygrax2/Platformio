@@ -17,45 +17,80 @@
 #include "Joystick.h"
 #include "SimpleI2C.h"
 #include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-//Enumeration for Viscometer Modes
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+/// Main operating modes
 enum ViscometerMode {
     automatic_Mode = 0,
     manual_Mode = 1
 };
+
+/// Automatic-mode substates (kept for future use)
 enum AutomaticState {
-    AUTO_IDLE = 0,          // Waiting for START_VISC command / ready
-    AUTO_COLOR_READ,        // Read color sensor & map to target viscosity
-    AUTO_HOMING,            // Home turret / Z axis and perform safety checks
-    AUTO_LOWER_SPINDLE,     // Lower spindle into the container
-    AUTO_PRE_MIX,           // Short stabilization mix (e.g., 30 RPM for a few seconds)
-    AUTO_MEASURE,           // Take measurement (ADC current + encoder -> viscosity)
-    AUTO_EVALUATE,          // Compare measured viscosity vs target (decision)
-    AUTO_COMPUTE_DOSE,      // Compute dose (ml) to add
-    AUTO_DOSE,              // Activate pump to add dilution
-    AUTO_STIR,              // Stir at higher RPM (e.g., 120 RPM)
-    AUTO_WAIT_SETTLE,       // Wait for foam/air to dissipate
-    AUTO_REMEASURE,         // Re-measure viscosity after dosing/stir/settle
-    AUTO_RAISE_SPINDLE,     // Raise spindle to safe position
-    AUTO_ROTATE_TO_CLEAN,   // Rotate turret/spindle to cleaning station
-    AUTO_CLEANING,          // Run cleaning sequence (flush/rinse)
-    AUTO_COMPLETE,          // Cycle complete, success
-    AUTO_ERROR              // Error/abort inside automatic sequence
+    AUTO_IDLE = 0,
+    AUTO_COLOR_READ,
+    AUTO_HOMING,
+    AUTO_LOWER_SPINDLE,
+    AUTO_MEASURE,
+    AUTO_EVALUATE,
+    AUTO_COMPUTE_DOSE,
+    AUTO_DOSE,
+    AUTO_STIR,
+    AUTO_WAIT_SETTLE,
+    AUTO_REMEASURE,
+    AUTO_RAISE_SPINDLE,
+    AUTO_ROTATE_TO_CLEAN,
+    AUTO_CLEANING,
+    AUTO_COMPLETE,
+    AUTO_ERROR
 };
 
-//Classes definitions
-SimpleTimer timer;
-BDCMotor motor1; //Pins for motor driver
-SimplePID motorPID;
-Stepper stepperMotor_UP_Down;
-Stepper StepperMotor_rotate;    
-SimpleADC Current_VOltage_Torque;
-SimpleGPIO Button_automatic_mode;
-Joystick Joystick_System;
-SimpleGPIO Buzzer;
-SimpleI2C ColorSensor;
-QuadratureEncoder Encoder_motor;
+/// Manual-mode substates (these are the ones the joystick will step through)
+enum ManualState {
+    MANUAL_IDLE = 0,         // waiting state inside manual mode
+    MANUAL_COLOR_READ = 1,   // optional: read color
+    MANUAL_MOVE_TURRET = 2,  // joystick X/Y control of steppers
+    MANUAL_MEASURE = 3,      // measure viscosity
+    MANUAL_EVALUATE = 4,     // evaluate measurement vs target
+    MANUAL_COMPUTE_DOSE = 5, // compute dose (ml)
+    MANUAL_DOSE = 6,         // perform dosing
+    MANUAL_STIR = 7,         // stir
+    MANUAL_WAIT_SETTLE = 8,  // wait to settle
+    MANUAL_CLEANING = 9,     // cleaning procedure
+    MANUAL_DRYING = 10,
+    MANUAL_COMPLETE = 11
+};
 
+// ---------------------------------------------------------------------------
+// GLOBAL STATE (default values)
+// ---------------------------------------------------------------------------
+ ViscometerMode Case_Viscometer;   // declared/defined in main.cpp
+ AutomaticState Auto_State;        // declared/defined in main.cpp
+ ManualState Manual_State;         // declared/defined in main.cpp
+
+// ---------------------------------------------------------------------------
+// Hardware / object declarations (singletons used across files)
+// ---------------------------------------------------------------------------
+ SimpleTimer timer;
+ BDCMotor motor1;
+ SimplePID motorPID;
+ Stepper stepperMotor_UP_Down;
+ Stepper StepperMotor_rotate;
+ SimpleADC Current_VOltage_Torque;
+ SimpleGPIO Button_automatic_mode;
+ Joystick Joystick_System;
+ SimpleGPIO Buzzer;
+ SimpleI2C ColorSensor;
+ QuadratureEncoder Encoder_motor;
+
+// ---------------------------------------------------------------------------
+// PWM Timer Configuration
+// ---------------------------------------------------------------------------
 //PWM Timer Configuration
 TimerConfig PWM_Timer_BDCMotor = {
     .timer = LEDC_TIMER_0,
@@ -75,28 +110,29 @@ TimerConfig Stepper_Rotate_PWM = {
     .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
+// ---------------------------------------------------------------------------
+// Pin definitions (extern so main.cpp defines them)
+// ---------------------------------------------------------------------------
+ uint8_t SpinMotorPin[2];
+ uint8_t ChMotor[2];
+ uint8_t Current_VOltage_Torque_PIN;
+ uint8_t joystickx_pin;
+ uint8_t joysticky_pin;
+ uint8_t joystickbutton_pin;
+ uint8_t StepperMotorUP_Down_pins[3];
+ uint8_t StepperMotorRotate_pins[3];
+ uint8_t StepperMotorUP_Down_ch;
+ uint8_t StepperMotorRotate_ch;
+ uint8_t Buzzer_pin;
+ uint8_t ColorSensor_pin[2];
+ uint8_t Encoder_motor_pins[2];
 
-//Pins 
-uint8_t SpinMotorPin[2] = {18,19};
-uint8_t ChMotor[2] = {0,1};
-uint8_t Current_VOltage_Torque_PIN = 34; //ADC1_6
-uint8_t joystickx_pin = 36; 
-uint8_t joysticky_pin = 39; 
-uint8_t joystickbutton_pin = 4; 
-uint8_t StepperMotorUP_Down_pins[3] = {25,26,27};
-uint8_t StepperMotorRotate_pins[3] = {14,12,13};
-uint8_t StepperMotorUP_Down_ch = 2;
-uint8_t StepperMotorRotate_ch = 3;
-uint8_t Buzzer_pin = 5;
-uint8_t ColorSensor_pin[2]= {21,22}; //SDA, SCL
-uint8_t Encoder_motor_pins[2] = {32,33};
-float u ; //control variable
+// Control variable
+ float u;
 
-
-//Constants, will be changed later
-const float Kp = 1.0f;
-const float Ki = 0.5f;
-const float Kd = 0.1f;
-
+// PID tuning defaults
+const float Kp;
+const float Ki;
+const float Kd;
 
 #endif // __DEFINITONS_H__
