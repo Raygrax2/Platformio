@@ -1,88 +1,16 @@
 // main.cpp
 #include "definitons.h"
 
-// ---------------------------------------------------------------------------
-// Define globals declared in definitons.h
-// ---------------------------------------------------------------------------
-ViscometerMode Case_Viscometer = automatic_Mode;
-AutomaticState Auto_State = AUTO_IDLE;
-ManualState Manual_State = MANUAL_IDLE;
-
-SimpleTimer timer;
-BDCMotor motor1;
-SimplePID motorPID;
-Stepper stepperMotor_UP_Down;
-Stepper StepperMotor_rotate;
-SimpleADC Current_VOltage_Torque;
-SimpleGPIO Button_automatic_mode;
-Joystick Joystick_System;
-SimpleGPIO Buzzer;
-SimpleI2C ColorSensor;
-QuadratureEncoder Encoder_motor;
-
-TimerConfig PWM_Timer_BDCMotor = {
-    .timer = LEDC_TIMER_0,
-    .frequency = 20000,
-    .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
-};
-TimerConfig Stepper_down_up_PWM = {
-    .timer = LEDC_TIMER_0,
-    .frequency = 20000,
-    .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
-};
-TimerConfig Stepper_Rotate_PWM = {
-    .timer = LEDC_TIMER_0,
-    .frequency = 20000,
-    .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
-};
-
-uint8_t SpinMotorPin[2] = {18, 19};
-uint8_t ChMotor[2] = {0, 1};
-uint8_t Current_VOltage_Torque_PIN = 34;
-uint8_t joystickx_pin = 36;
-uint8_t joysticky_pin = 39;
-uint8_t joystickbutton_pin = 4;
-uint8_t StepperMotorUP_Down_pins[3] = {25, 26, 27};
-uint8_t StepperMotorRotate_pins[3] = {14, 12, 13};
-uint8_t StepperMotorUP_Down_ch = 2;
-uint8_t StepperMotorRotate_ch = 3;
-uint8_t Buzzer_pin = 5;
-uint8_t ColorSensor_pin[2] = {21, 22};
-uint8_t Encoder_motor_pins[2] = {32, 33};
-
-float u = 0.0f;
-
-const float Kp = 1.0f;
-const float Ki = 0.5f;
-const float Kd = 0.1f;
-
-// ---------------------------------------------------------------------------
-// Parameters & state for manual viscosity loop
-// ---------------------------------------------------------------------------
- float targetViscosity = 0.0f;   // example target (cP) -- set by color or operator depending on mode
- float measuredViscosity = 0.0f;
- float added_ml = 0.0f;
- int iteration_count = 0;
- const int MAX_ITER = 6;
- const float MAX_ADD_ML = 100.0f;
-
-// joystick deadzone
- const int JOY_MID = 2048;
- const int JOY_DEAD = 200;
-
-// helper prototypes 
- float measureViscosity();            // measure viscosity using ADC+encoder
- float computeDose_ml(float meas, float target); // compute ml to add
- bool performDose(float ml);          // call pump for ml (returns success)
- void performStir();                  // stir at high RPM for a time
- void waitSettle();                   // wait for foam to settle
- void stopAllMotion();
+// helper prototypes
+float measureViscosity();                       // measure viscosity using ADC+encoder
+float computeDose_ml(float meas, float target); // compute ml to add
+bool performDose(float ml);                     // call pump for ml (returns success)
+void performStir();                             // stir at high RPM for a time
+void waitSettle();                              // wait for foam to settle
+void stopAllMotion();
 
 // timer interrupt helper (already used)
- void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt(); }
+void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt(); }
 
 // ---------------------------------------------------------------------------
 // Minimal implementations (placeholders) - replace with real implementations
@@ -91,21 +19,23 @@ static float measureViscosity()
 {
     // Placeholder: read Current_VOltage_Torque ADC and encoder speed to compute viscosity
     // Replace with your real conversion (torque = Kt*(I-I0); visc = f(torque,omega))
-    float adc = Current_VOltage_Torque.read();          // example API
-    float enc_deg_s = Encoder_motor.getSpeed();         // degrees per second
+    float adc = Current_VOltage_Torque.read(ADC_READ_MV);  // 
+    float enc_deg_s = Encoder_motor.getSpeed(); // degrees per second
     float rpm = enc_deg_s * 60.0f / 360.0f;
     // Dummy relation for testing:
-    float torque = adc; // placeholder
+    float torque = adc;                                 // placeholder
     float visc = torque * 1.0f / (rpm + 1.0f) * 100.0f; // purely illustrative not real eq
     return visc;
 }
 
-static float computeDose_ml(float meas, float target) //can use PID here 
+static float computeDose_ml(float meas, float target) // can use PID here thats why is a separate function
 {
     float diff = meas - target;
-    if (diff <= 0.0f) return 0.0f;
-    float ml = diff * 0.5f; 
-    if (ml < 1.0f) ml = 1.0f;
+    if (diff <= 0.0f)
+        return 0.0f;
+    float ml = diff * 0.5f;
+    if (ml < 1.0f)
+        ml = 1.0f;
     return ml;
 }
 
@@ -114,16 +44,11 @@ static bool performDose(float ml)
     // Placeholder: call pump driver with calibrated time for ml
     // Return true on success, false on failure
     added_ml += ml;
-    // simulate success
+    PUMP.set_speed(upump_speed);//controlled by a variable of PID
     return (added_ml <= MAX_ADD_ML);
 }
 
-static void performStir()
-{
-    // Placeholder: spin motor at high rpm for some time
-    // motor1.setTargetRPM(120.0f); vTaskDelay(pdMS_TO_TICKS(30000)); motor1.stop();
-    // For now, just a no-op
-}
+
 
 static void waitSettle()
 {
@@ -166,16 +91,19 @@ extern "C" void app_main()
     {
         if (timer.interruptAvailable())
 
-        // Read interlock every tick (active low = pressed)
-        bool interlock_pressed = (Button_automatic_mode.get() == 0);
+            // Read interlock every tick (active low = pressed)
+            bool interlock_pressed = (Button_automatic_mode.get() == 0);
 
         // Update joystick so .isPressed() works correctly
         Joystick_System.updateOnce();
 
         // Enter manual while interlock held; otherwise automatic
-        if (interlock_pressed) {
+        if (interlock_pressed)
+        {
             Case_Viscometer = manual_Mode;
-        } else {
+        }
+        else
+        {
             Case_Viscometer = automatic_Mode;
         }
 
@@ -185,118 +113,122 @@ extern "C" void app_main()
             // Manual state machine - pressing joystick advances to next state
             switch (Manual_State)
             {
-                case MANUAL_IDLE:
-                    if (Joystick_System.isPressed()) {
-                        Manual_State = MANUAL_COLOR_READ;
-                    }
-                    break;
-
-                case MANUAL_COLOR_READ:
-                    if (Joystick_System.isPressed()) {
-                        // (optionally read color sensor and set targetViscosity)
-                        Manual_State = MANUAL_MOVE_TURRET;
-                    }
-                    break;
-
-                case MANUAL_MOVE_TURRET:
+            case MANUAL_IDLE:
+                if (Joystick_System.isPressed())
                 {
-                    int rawX = Joystick_System.getRawX();
-                    int rawY = Joystick_System.getRawY();
-
-                    auto map_speed = [](int raw)->float {
-                        float v = ((float)raw - (float)JOY_MID) / (float)JOY_MID;
-                        if (fabsf(v) < ((float)JOY_DEAD / (float)JOY_MID)) return 0.0f;
-                        if (v > 1.0f) v = 1.0f;
-                        if (v < -1.0f) v = -1.0f;
-                        return v * 100.0f;
-                    };
-
-                    float spdX = map_speed(rawX);
-                    float spdY = map_speed(rawY);
-
-                    if (fabsf(spdX) < 1e-3f) StepperMotor_rotate.setSpeed(0.0f);
-                    else StepperMotor_rotate.setSpeed(spdX);
-
-                    if (fabsf(spdY) < 1e-3f) stepperMotor_UP_Down.setSpeed(0.0f);
-                    else stepperMotor_UP_Down.setSpeed(spdY);
-
-                    if (Joystick_System.isPressed()) {
-                        stopAllMotion();
-                        Manual_State = MANUAL_MEASURE;
-                    }
+                    Manual_State = MANUAL_COLOR_READ;
                 }
-                    break;
+                break;
 
-                case MANUAL_MEASURE:
-                    measuredViscosity = measureViscosity();
-                    if (Joystick_System.isPressed()) {
-                        Manual_State = MANUAL_EVALUATE;
-                    }
-                    break;
-
-                case MANUAL_EVALUATE:
-                    if (measuredViscosity > targetViscosity) {
-                        if (Joystick_System.isPressed()) {
-                            iteration_count = 0;
-                            Manual_State = MANUAL_COMPUTE_DOSE;
-                        }
-                    } else {
-                        if (Joystick_System.isPressed()) {
-                            Manual_State = MANUAL_COMPLETE;
-                        }
-                    }
-                    break;
-
-                case MANUAL_COMPUTE_DOSE:
+            case MANUAL_COLOR_READ:
+                if (Joystick_System.isPressed())
                 {
-                    float dose_ml = computeDose_ml(measuredViscosity, targetViscosity);
-                    (void)dose_ml;
-                    if (Joystick_System.isPressed()) Manual_State = MANUAL_DOSE;
+                    // (optionally read color sensor and set targetViscosity)
+                    Manual_State = MANUAL_MOVE_TURRET;
                 }
-                    break;
+                break;
 
-                case MANUAL_DOSE:
+            case MANUAL_MOVE_TURRET:
+            {
+                int rawX = Joystick_System.getRawX();
+                int rawY = Joystick_System.getRawY();
+                stepperMotor_UP_Down.setSpeed((rawY - 2048) / 2048.0f * 100.0f); // scale to -100 to +100
+                StepperMotor_rotate.setSpeed((rawX - 2048) / 2048.0f * 100.0f);  // scale to -100 to +100
+
+                if (Joystick_System.isPressed())
                 {
-                    float dose_ml = computeDose_ml(measuredViscosity, targetViscosity);
-                    bool ok = performDose(dose_ml);
-                    if (!ok) {
-                        Manual_State = MANUAL_COMPLETE;
-                    } else {
-                        if (Joystick_System.isPressed()) Manual_State = MANUAL_STIR;
-                    }
-                }
-                    break;
-
-                case MANUAL_STIR:
-                    if (Joystick_System.isPressed()) {
-                        performStir();
-                        Manual_State = MANUAL_WAIT_SETTLE;
-                    }
-                    break;
-
-                case MANUAL_WAIT_SETTLE:
-                    waitSettle();
-                    // After settle, re-measure and return to MEASURE (user must press to evaluate)
-                    measuredViscosity = measureViscosity();
+                    stepperMotor_UP_Down.setSpeed(0.0f);
+                    StepperMotor_rotate.setSpeed(0.0f);
                     Manual_State = MANUAL_MEASURE;
-                    break;
+                }
+            }
+            break;
 
-                case MANUAL_CLEANING:
-                    if (Joystick_System.isPressed()) {
-                        // cleaning placeholder
+            case MANUAL_MEASURE:
+                measuredViscosity = measureViscosity();
+                if (Joystick_System.isPressed())
+                {
+                    Manual_State = MANUAL_EVALUATE;
+                }
+                break;
+
+            case MANUAL_EVALUATE:
+                if (measuredViscosity > targetViscosity)
+                {
+                    if (Joystick_System.isPressed())
+                    {
+                        iteration_count = 0;
+                        Manual_State = MANUAL_COMPUTE_DOSE;
+                    }
+                }
+                else
+                {
+                    if (Joystick_System.isPressed())
+                    {
                         Manual_State = MANUAL_COMPLETE;
                     }
-                    break;
+                }
+                break;
 
-                case MANUAL_COMPLETE:
-                    if (Joystick_System.isPressed()) {
-                        Manual_State = MANUAL_IDLE;
-                    }
-                    break;
+            case MANUAL_COMPUTE_DOSE:
+            {
+                float dose_ml = computeDose_ml(measuredViscosity, targetViscosity);
+                (void)dose_ml;
+                if (Joystick_System.isPressed())
+                    Manual_State = MANUAL_DOSE;
+            }
+            break;
 
-                default:
+            case MANUAL_DOSE:
+            {
+                float dose_ml = computeDose_ml(measuredViscosity, targetViscosity);
+                bool ok = performDose(dose_ml);
+                if (!ok)
+                {
+                    Manual_State = MANUAL_COMPLETE;
+                }
+                else
+                {
+                    if (Joystick_System.isPressed())
+                        Manual_State = MANUAL_STIR;
+                }
+            }
+            break;
+
+            case MANUAL_STIR:
+                if (Joystick_System.isPressed())
+                {
+                    //might implementate pulling to time eleapses 
+                    
+                    motor1.setSpeed(100.0f);
+                    Manual_State = MANUAL_WAIT_SETTLE;
+                }
+                break;
+
+            case MANUAL_WAIT_SETTLE:
+                waitSettle();
+                if (Joystick_System.isPressed())
+                Manual_State = MANUAL_MEASURE;
+                break;
+
+            case MANUAL_CLEANING:
+                if (Joystick_System.isPressed())
+                {
+                    // cleaning placeholder
+                    Manual_State = MANUAL_COMPLETE;
+                }
+                break;
+
+            case MANUAL_COMPLETE:
+                if (Joystick_System.isPressed())
+                {
                     Manual_State = MANUAL_IDLE;
-                    break;
+                }
+                break;
+
+            default:
+                Manual_State = MANUAL_IDLE;
+                break;
             } // end switch Manual_State
 
             // Do not advance automatic while interlock held
@@ -305,7 +237,7 @@ extern "C" void app_main()
         // --- AUTOMATIC MODE (default) ---
         if (Case_Viscometer == automatic_Mode)
         {
-            
+
             Auto_State = AUTO_IDLE;
         }
     } // end while
