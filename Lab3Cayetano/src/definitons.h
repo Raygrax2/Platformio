@@ -60,7 +60,7 @@ float Deg_per_edge = 360.0f / 2048.0f; // Grados por flanco
 uint8_t EncoderPIN[2] = {32, 35};      // Pines del encoder
 SimplePID PID;
 
-uint32_t dt = 2000; // 2 ms (consistent with timer period)
+uint32_t dt = 5000; // 2 ms (consistent with timer period)
 float Kp = 1.0f;  // initial proportional gain
 float Ki = 0.0f;  // initial integral gain
 float Kd = 0.0f;  // initial derivative gain
@@ -69,10 +69,10 @@ float speed_raw = 0.0f;
 uint8_t lwghtmessage = 0;
 float speed_filtered = 1.0f;
 float current_position = 0.0f;      // in degrees
-int current_mode = MODE_MANUAL_PWM; // default mode
-float ref = -100.0f;                // reference position (deg)
+int current_mode = MODE_POSITION; // default mode
+float ref = -70.0f;                // reference position (deg)
 // Local receive buffer (do not shadow global Buffer in definitions.h)
-char rxbuf[32];
+char rxbuf[48];
 float u = 0.0f;
 
 uint8_t Ain1Pin = 27; // AIN1

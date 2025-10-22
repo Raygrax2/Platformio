@@ -30,6 +30,7 @@ void SimplePWM::setup(const uint8_t pin, const uint8_t channel, TimerConfig *tim
         .timer_sel = timer_config->timer,
         .duty = 0,
         .hpoint = 0,
+        .sleep_mode=LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
         .flags = invert,
     };
     _last_level = 0;
