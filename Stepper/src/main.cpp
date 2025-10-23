@@ -14,11 +14,12 @@ extern "C" void app_main()
     SimpleGPIO Dir;
     Dir.setup(4, GPIO_MODE_OUTPUT);
     SimplePWM Step;
-    Step.setup(27, Channels, &PWM_TimerA);
-    Dir.set(1);
-    Step.setDuty(50.0f);
+    Step.setup(21, Channels, &PWM_TimerA);
+    int dir = 1;
+    Dir.set(dir);
+    Step.setDuty(75.0f);
     SimpleUART UART_1(115200);
-    float frecuency = 1000.0f;
+    float frecuency = 650.0f;
     
     while (1)
     {
@@ -28,11 +29,12 @@ extern "C" void app_main()
 
             if (UART_1.available()){
                 UART_1.read(Buffer, UART_1.available());
-                sscanf(Buffer, "%f\n",&frecuency);
+                sscanf(Buffer, "%f,%d\n",&frecuency,&dir);
             }
             
             Step.setFrequency(frecuency);
-            printf("Frequency set to: %.2f Hz\n", frecuency);
+            Dir.set(dir);
+            printf("Frequency set to: %.2f %d Hz\n", frecuency, dir);
         }
     }
 }
