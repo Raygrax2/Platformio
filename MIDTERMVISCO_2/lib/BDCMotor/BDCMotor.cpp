@@ -16,7 +16,7 @@ void BDCMotor::setSpeed(float Speed)
     {
         in[0].setDuty(Speed);  
         in[1].setDuty(0.0f);
-        printf("Set Speed: %.2f\n",Speed);
+        
     }
     else
     {
