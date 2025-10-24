@@ -38,10 +38,12 @@ TimerConfig PWM_TimerA{
     .mode = LEDC_LOW_SPEED_MODE};
 
 TimerConfig PWM_TimerB{
-    .timer = LEDC_TIMER_1,
-    .frequency = 1000, // Frecuencia PWM motor B (dummy)
-    .bit_resolution = LEDC_TIMER_10_BIT,
+    .timer = LEDC_TIMER_0,
+    .frequency = 650, // Frecuencia PWM motor A (Hz)
+    .bit_resolution = LEDC_TIMER_14_BIT,
     .mode = LEDC_LOW_SPEED_MODE};
+
+
 
 // --- Objetos globales ---
 QuadratureEncoder Encoder;
