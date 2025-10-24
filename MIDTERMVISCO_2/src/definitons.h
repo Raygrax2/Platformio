@@ -24,18 +24,18 @@
 // ------------------- ENUM VISCOMETER STATES -------------------
 enum ViscometerState {
     STATE_POWER_ON = 0,
-    STATE_SAMPLE_PLACEMENT,
-    STATE_SAMPLE_POSITIONED,
-    STATE_CYLINDER_LOWERING,
-    STATE_STIR_LIQUID,
-    STATE_MEASURE_VISCOSITY,
-    STATE_MEASUREMENT_DISPLAY,
-    STATE_SAMPLE_REMOVAL,
-    STATE_CYLINDER_CLEANING,
-    STATE_CYLINDER_DRYING,
-    STATE_MANUAL_MOVEMENT,
-    STATE_PROCESS_RESTART,
-    STATE_COUNT
+    STATE_SAMPLE_PLACEMENT = 1,
+    STATE_SAMPLE_POSITIONED = 2,
+    STATE_CYLINDER_LOWERING =3,
+    STATE_STIR_LIQUID = 4,
+    STATE_MEASURE_VISCOSITY = 5,
+    STATE_MEASUREMENT_DISPLAY =6,
+    STATE_MANUAL_MOVEMENT = 7,
+    STATE_SAMPLE_REMOVAL = 8,
+    STATE_CYLINDER_CLEANING = 9,
+    STATE_CYLINDER_DRYING = 10,
+    STATE_PROCESS_RESTART = 11,
+    STATE_COUNT = 12
 };
 
 // ------------------- TIMERS / PWM CONFIG -------------------
@@ -68,6 +68,7 @@ static SimpleGPIO STEPPER_UP_DIR;
 static BDCMotor Motor_spin;
 static QuadratureEncoder enco;
 static PID_CAYETANO PID;
+SimpleUART UART_MESSAGE(115200);
 
 // ------------------- PINS & HW CONSTANTS (edit here if needed) -------------------
 static const uint8_t PinX = 26;
@@ -95,6 +96,7 @@ static float Gain[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd as you provided
 static ViscometerState currentState = STATE_POWER_ON;
 static int currentRPM = 0;
 static float currentViscosityCP = 0.0f;
+uint64_t len = 0;
 
 // UART buffer for formatting if needed
 static char Buffer[64];

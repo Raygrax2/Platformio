@@ -64,31 +64,31 @@ extern "C" void app_main()
     while (1)
     {
         // wait for timer tick
-        if (!timer.interruptAvailable()) {
-            taskYIELD();
-            continue;
-        }
-
-        // update joystick state (prints internally if JOY.result() does)
-        JOY.result();
-
-        // Button -> state transition (one-shot implemented in JOY.Pressed())
-        if (JOY.Pressed()) {
-            transitionState();
-            state_start_us = esp_timer_get_time();
-        }
-
-        // update measured rpm from encoder
-        // we assume enco.getspeed() returns RPM as float (per your earlier mention)
-        float measured_rpm = enco.getSpeed();
-        if (measured_rpm < 0.0f) measured_rpm = 0.0f;
-        currentRPM = (int)(measured_rpm + 0.5f);
-
-        // -------------------- STATE MACHINE BEHAVIOR --------------------
-        uint64_t now_us = esp_timer_get_time();
-
-        switch (currentState)
+        if (timer.interruptAvailable())
         {
+            
+
+            // update joystick state (prints internally if JOY.result() does)
+            JOY.result();
+            // Button -> state transition (one-shot implemented in JOY.Pressed())
+            if (JOY.Pressed())
+            {
+                transitionState();
+                state_start_us = esp_timer_get_time();
+            }
+
+            // update measured rpm from encoder
+            // we assume enco.getspeed() returns RPM as float (per your earlier mention)
+            float measured_rpm = enco.getSpeed();
+            if (measured_rpm < 0.0f)
+                measured_rpm = 0.0f;
+            currentRPM = (int)(measured_rpm + 0.5f);
+
+            // -------------------- STATE MACHINE BEHAVIOR --------------------
+            uint64_t now_us = esp_timer_get_time();
+
+            switch (currentState)
+            {
             case STATE_POWER_ON:
                 // keep everything off
                 PWM_Stepper_ROT.setDuty(0.0f);
@@ -105,6 +105,39 @@ extern "C" void app_main()
                 break;
 
             case STATE_CYLINDER_LOWERING:
+                // pass it to the manual movement,
+                //  joystick controls turret and vertical stepper ONLY in these states
+                if (JOY.zero())
+                {
+                    PWM_Stepper_ROT.setDuty(0.0f);
+                    PWM_Stepper_UP.setDuty(0.0f);
+                }
+                else if (JOY.Left())
+                {
+                    STEPPER_ROT_DIR.set(1);
+                    PWM_Stepper_ROT.setDuty(50.0f);
+                    PWM_Stepper_ROT.setFrequency(650);
+                }
+                else if (JOY.Right())
+                {
+                    STEPPER_ROT_DIR.set(0);
+                    PWM_Stepper_ROT.setDuty(50.0f);
+                    PWM_Stepper_ROT.setFrequency(650);
+                }
+                else if (JOY.Up())
+                {
+                    STEPPER_UP_DIR.set(1);
+                    PWM_Stepper_UP.setDuty(50.0f);
+                    PWM_Stepper_UP.setFrequency(650);
+                }
+                else if (JOY.Down())
+                {
+                    STEPPER_UP_DIR.set(0);
+                    PWM_Stepper_UP.setDuty(50.0f);
+                    PWM_Stepper_UP.setFrequency(650);
+                }
+                break;
+
             case STATE_MANUAL_MOVEMENT:
                 // joystick controls turret and vertical stepper ONLY in these states
                 if (JOY.zero())
@@ -152,6 +185,7 @@ extern "C" void app_main()
                 float u = PID.computedU(error); // your PID returns control value u
                 // apply u directly as motor speed setpoint (per your instruction)
                 Motor_spin.setSpeed(u);
+                float viscocity;
 
                 // (optional) collect measurement samples for viscosity calculation here
                 // For now currentViscosityCP can be updated elsewhere; keep it as-is or compute
@@ -175,8 +209,9 @@ extern "C" void app_main()
 
             default:
                 break;
-        } // switch
 
+            } // switch
+        }
         // Note: publishState() already called on transitions. If you want periodic updates,
         // uncomment the next line.
         // publishState();
