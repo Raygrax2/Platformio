@@ -10,7 +10,7 @@ void transitionState()
 }
 
 extern "C" void app_main()
-{
+{ 
     esp_task_wdt_deinit();
 
     // ------------------- SETUP -------------------
