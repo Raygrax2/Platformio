@@ -24,8 +24,6 @@
 #include "SimplePWM.h"
 #include "Filter.h"
 
-<<<<<<< HEAD
-=======
 // ------------------- ENUM VISCOMETER STATES -------------------
 enum ViscometerState {
     STATE_POWER_ON = 0,
@@ -44,7 +42,6 @@ enum ViscometerState {
 };
 
 // ------------------- TIMERS -------------------
->>>>>>> StateMAchine_Implementation
 TimerConfig PWM_TimerA{
     .timer = LEDC_TIMER_0,
     .frequency = 650, // Frecuencia PWM motor A (Hz)
@@ -55,18 +52,12 @@ TimerConfig PWM_UP_STEP{
     .timer = LEDC_TIMER_1,
     .frequency = 650, // Frecuencia PWM motor UP (Hz)
     .bit_resolution = LEDC_TIMER_14_BIT,
-<<<<<<< HEAD
     .mode = LEDC_LOW_SPEED_MODE};
 TimerConfig PWM_Spin{
     .timer = LEDC_TIMER_2,
     .frequency = 650, // Frecuencia PWM motor A (Hz)
     .bit_resolution = LEDC_TIMER_14_BIT,
     .mode = LEDC_LOW_SPEED_MODE};
-=======
-    .mode = LEDC_LOW_SPEED_MODE
-};
->>>>>>> StateMAchine_Implementation
-
 // ------------------- GLOBAL OBJECTS -------------------
 SimpleTimer timer;
 Joystick JOY;
@@ -78,11 +69,8 @@ BDCMotor Motor_spin;
 QuadratureEncoder enco;
 PID_CAYETANO PID;
 
-<<<<<<< HEAD
 // PINS
-=======
 // ------------------- PINS -------------------
->>>>>>> StateMAchine_Implementation
 uint8_t PinX = 14;
 uint8_t PinY = 13;
 uint8_t Button = 32;
@@ -94,17 +82,14 @@ uint8_t Spin_MotorPIns[2] = {22, 23};
 uint8_t Spin_MotorCH[2] = {2, 3};
 uint8_t Encoder_PIn[2] = {16, 17};
 
-<<<<<<< HEAD
 float Gain[3] = {1.5f, 0.5f, 0.5f};
 float Speed;
 float error;
 float u;
-=======
 // ------------------- GLOBAL VARIABLES -------------------
 ViscometerState currentState;
 int currentRPM;
 float currentViscosityCP; // last measured viscosity in cPoise
->>>>>>> StateMAchine_Implementation
 
 // Buffers UART/debug
 char Buffer[32];
