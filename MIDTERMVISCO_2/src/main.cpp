@@ -6,20 +6,57 @@ extern "C" void app_main()
 {
 
     esp_task_wdt_deinit();
-    lcd_init();  // Initialize the LCD
-    lcd_clear(); // Clear the LCD screen
-
     timer.setup(timerinterrupt, "Timer");
     timer.startPeriodic(10000);
-    RGB_LED.setup(RGB_PINS, PWM_CH, &RGBTIMER, 0);
-    int current_state = WELCOME;
-    int pressed;
-    char Buff_UART[32];
-    float RPMS;
-    lcd_put_cursor(0, 0);
-    lcd_send_string("Viscometer");
+    JOY.setup(PinX, PinY, Button);
+    JOY.calibrate(1000000);
+    PWM_Stepper_ROT.setup(PWM_ROT_PIN, 0, &PWM_TimerA);
+    PWM_Stepper_UP.setup(PWM_UP_PIN, 1, &PWM_UP_STEP);
+    PWM_Stepper_UP.setDuty(50.0f);
+    PWM_Stepper_ROT.setDuty(50.0f);
+    STEPPER_ROT_DIR.setup(ROT_PIN_DIR, GPO);
+    STEPPER_UP_DIR.setup(UP_PIN_DIR, GPO);
+    STEPPER_UP_DIR.set(1);
+    STEPPER_ROT_DIR.set(1);
 
     while (1)
     {
+        JOY.result();
+          if (JOY.Pressed())
+        {
+            //PRESSED BECAUSE OF THE INVERSE LOGIC PULL UP RESISTOR
+            printf("PRESSED\n");
+            
+        }
+         if (JOY.zero())
+        {
+            PWM_Stepper_ROT.setDuty(0.0f);
+                        PWM_Stepper_UP.setDuty(0.0f);
+
+        } 
+        else if (JOY.Left())
+        {
+            PWM_Stepper_ROT.setDuty(50.0f);
+            STEPPER_ROT_DIR.set(1);
+            PWM_Stepper_ROT.setFrequency(650);
+        }
+        else if (JOY.Right())
+        {
+            PWM_Stepper_ROT.setDuty(50.0f);
+            STEPPER_ROT_DIR.set(0);
+            PWM_Stepper_ROT.setFrequency(650);
+        }
+         else if (JOY.Up())
+        {
+            PWM_Stepper_UP.setDuty(50.0f);
+            STEPPER_UP_DIR.set(1);
+            PWM_Stepper_UP.setFrequency(650);
+        }
+        else if (JOY.Right())
+        {
+            PWM_Stepper_UP.setDuty(50.0f);
+            STEPPER_UP_DIR.set(0);
+            PWM_Stepper_UP.setFrequency(650);
+        }
     }
 }

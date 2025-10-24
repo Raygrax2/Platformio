@@ -19,6 +19,7 @@ public:
     bool Right();
     bool Left();
     bool Pressed();
+    bool zero();
     bool result();
 
 private:

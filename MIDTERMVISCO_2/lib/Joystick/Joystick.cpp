@@ -133,5 +133,34 @@ bool Joystick::result()
 
 bool Joystick::Pressed()
 {
-    return _button.get();
+    // Lectura raw (con pull-up: not pressed => HIGH (1), pressed => LOW (0))
+    bool raw_level = _button.get() != 0; // true when HIGH (not pressed)
+    bool pressed_raw = !raw_level;       // true when physically pressed
+
+    uint64_t now = esp_timer_get_time();
+
+    if (pressed_raw != _btn_last_state)
+    {
+        // hubo cambio en lectura raw, reiniciamos timer de estabilidad
+        _btn_last_state = pressed_raw;
+        _btn_last_change_us = now;
+        return false; // esperar a estabilidad
+    }
+
+    // si ha estado estable el tiempo de debounce y el estado estable cambió
+    if ((now - _btn_last_change_us) >= _btn_debounce_us)
+    {
+        if (_btn_stable_state != pressed_raw)
+        {
+            // estado estable cambió -> si es press (rising logical for pressed_raw true) devolvemos true una vez
+            _btn_stable_state = pressed_raw;
+            if (pressed_raw)
+            {
+                return true; // evento one-shot de pulsación
+            }
+            // si es liberación (pressed_raw == false) devolvemos false (no queremos evento)
+        }
+    }
+
+    return false;
 }
