@@ -124,6 +124,9 @@ extern "C" void app_main()
                 error = setpoint - measured_rpm;
                 float u = PID.computedU(error);
                 Motor_spin.setSpeed(u);
+                //SB1 = I_V_Converted.read(ADC_READ_MV);
+                //formula for the float viscocity = m*SB1+Sb0
+                // 
                 break;
             }
 
