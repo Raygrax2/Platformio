@@ -22,21 +22,6 @@
 #include "SimpleUART.h"
 
 // ------------------- ENUM VISCOMETER STATES -------------------
-enum ViscometerState {
-    STATE_POWER_ON = 0,
-    STATE_SAMPLE_PLACEMENT = 1,
-    STATE_SAMPLE_POSITIONED = 2,
-    STATE_CYLINDER_LOWERING =3,
-    STATE_STIR_LIQUID = 4,
-    STATE_MEASURE_VISCOSITY = 5,
-    STATE_MEASUREMENT_DISPLAY =6,
-    STATE_MANUAL_MOVEMENT = 7,
-    STATE_SAMPLE_REMOVAL = 8,
-    STATE_CYLINDER_CLEANING = 9,
-    STATE_CYLINDER_DRYING = 10,
-    STATE_PROCESS_RESTART = 11,
-    STATE_COUNT = 12
-};
 
 // ------------------- TIMERS / PWM CONFIG -------------------
 static TimerConfig PWM_TimerA{
@@ -76,13 +61,13 @@ static const uint8_t PinY = 27;
 static const uint8_t Button = 32;
 
 static const uint8_t PWM_ROT_PIN = 25;
-static const uint8_t ROT_PIN_DIR = 21;
+static const uint8_t ROT_PIN_DIR = 33;
 
 static const uint8_t PWM_UP_PIN = 18;
 static const uint8_t UP_PIN_DIR = 19;
 
 // Spin motor pins and channels for BDC driver / PWM
-static const uint8_t Spin_MotorPIns[2] = {22, 23};
+static const uint8_t Spin_MotorPIns[2] = {5, 23};
 static const uint8_t Spin_MotorCH[2] = {2, 3};
 
 // Encoder pins and degrees-per-edge
@@ -93,9 +78,10 @@ float ENCODER_DEGREES_PER_EDGE = 0.36445f; // degrees per edge, per your value
 static float Gain[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd as you provided
 
 // ------------------- INITIAL (GLOBAL) VARIABLES -------------------
-static ViscometerState currentState = STATE_POWER_ON;
-static int currentRPM = 0;
+static int currentstate=0;
+float currentRPM;
 static float currentViscosityCP = 0.0f;
+float error; 
 uint64_t len = 0;
 
 // UART buffer for formatting if needed
