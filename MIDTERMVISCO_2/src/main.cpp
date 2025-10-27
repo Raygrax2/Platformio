@@ -25,6 +25,7 @@ extern "C" void app_main()
     STEPPER_UP_DIR.setup(UP_PIN_DIR, GPO);
     char Buffer_message_1[32];
     char Buffer_message_2[32];
+    IV.setup(IB_PIN);
 
     STEPPER_ROT_DIR.set(1);
     STEPPER_UP_DIR.set(1);
@@ -120,11 +121,8 @@ extern "C" void app_main()
                 lcd_clear();
                 lcd_put_cursor(0, 0);
                 lcd_send_string("Measure");
-                float setpoint = 180.0f;
-                error = setpoint - measured_rpm;
-                float u = PID.computedU(error);
-                Motor_spin.setSpeed(u);
-                //SB1 = I_V_Converted.read(ADC_READ_MV);
+                double SB1 = IV.read(ADC_READ_MV);
+                float mu_rel = 6.25 * SB1 - 17.5; //
                 //formula for the float viscocity = m*SB1+Sb0
                 // 
                 break;
@@ -137,11 +135,9 @@ extern "C" void app_main()
                 sprintf(Buffer_message_1, "RPM: %f", currentRPM);
                 lcd_send_string(Buffer_message_1);
                 lcd_put_cursor(1, 0);
-                sprintf(Buffer_message_2, "RPM: %f", currentViscosityCP);
-
-                lcd_send_string("Viscocity: ");
-
-                Motor_spin.setSpeed(100.0f);
+                sprintf(Buffer_message_2, "VISCOSITY: %f", mu_rel);
+                lcd_send_string(Buffer_message_2);
+                Motor_spin.setSpeed(0.0f);
                 break;
             }
 
