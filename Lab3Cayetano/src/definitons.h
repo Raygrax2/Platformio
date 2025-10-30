@@ -36,11 +36,11 @@ float PID_GAINS[3] = {1.0f, 0.0f, 0.0f}; // Kp, Ki, Kd
 
 // --- Buffers UART o debug ---
 SimpleUART UART(115200);
-char rxbuf[48];
+char rxbuf[32];
 uint8_t len = 0;
 
 // --- Parámetros del encoder ---
-uint8_t EncoderPIN[2] = {32, 35}; // Pines del encoder
+uint8_t EncoderPIN[2] = {32, 14}; // Pines del encoder
 uint8_t AIN[2] = {27, 26};
 uint8_t CHA[2] = {0, 1}; 
 uint32_t dt = 5000; // 2 ms (consistent with timer period)
