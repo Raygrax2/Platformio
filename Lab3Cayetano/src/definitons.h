@@ -19,36 +19,35 @@ enum ControlMode
   MODE_SPEED = 1,      // Speed control with PID
   MODE_POSITION = 2    // Position control with PID
 };
-// --- Timers para PWM ---
 
 TimerConfig PWM_TimerA{
     .timer = LEDC_TIMER_0,
     .frequency = 20000, // Frecuencia PWM motor A (Hz)
     .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE};
-// --- Objetos globales ---
+// Global objects
 QuadratureEncoder Encoder;
 SimpleTimer timer;
 BDCMotor motorA;
 SimplePWM pwmmotorA;
 PID_CAYETANO PID_2;
-float PID_GAINS[3] = {1.0f, 0.0f, 0.0f}; // Kp, Ki, Kd
+SimpleUART UART(115200);
 
 // --- Buffers UART o debug ---
-SimpleUART UART(115200);
 char rxbuf[32];
 uint8_t len = 0;
 
 // --- Parámetros del encoder ---
 uint8_t EncoderPIN[2] = {32, 14}; // Pines del encoder
 uint8_t AIN[2] = {27, 26};
-uint8_t CHA[2] = {0, 1}; 
+uint8_t CHA[2] = {0, 1};
 uint32_t dt = 5000; // 2 ms (consistent with timer period)
 
-//Constant floats
-float Kp = 1.0f;    // initial proportional gain
-float Ki = 0.0f;    // initial integral gain
-float Kd = 0.0f;    // initial derivative gain
+// Constant floats
+float PID_GAINS[3] = {1.0f, 0.0f, 0.0f}; // Kp, Ki, Kd
+float Kp = 1.0f; // initial proportional gain
+float Ki = 0.0f; // initial integral gain
+float Kd = 0.0f; // initial derivative gain
 float error = 0.0f;
 float speed_raw = 0.0f;
 float current_position = 0.0f;      // in degrees

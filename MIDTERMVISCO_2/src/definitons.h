@@ -54,6 +54,7 @@ static BDCMotor Motor_spin;
 static QuadratureEncoder enco;
 static PID_CAYETANO PID;
 SimpleUART UART_MESSAGE(115200);
+static SimpleADC IV;
 
 // ------------------- PINS & HW CONSTANTS (edit here if needed) -------------------
 static const uint8_t PinX = 26;
@@ -65,6 +66,8 @@ static const uint8_t ROT_PIN_DIR = 33;
 
 static const uint8_t PWM_UP_PIN = 18;
 static const uint8_t UP_PIN_DIR = 19;
+
+static const uint8_t IB_PIN = 14;
 
 // Spin motor pins and channels for BDC driver / PWM
 static const uint8_t Spin_MotorPIns[2] = {5, 23};
@@ -83,7 +86,7 @@ float currentRPM;
 static float currentViscosityCP = 0.0f;
 float error; 
 uint64_t len = 0;
-
+float mu_rel = 0.0f;
 // UART buffer for formatting if needed
 static char Buffer[64];
 
