@@ -60,7 +60,9 @@ static SimpleADC IV;
 static const uint8_t PinX = 26;
 static const uint8_t PinY = 27;
 static const uint8_t Button = 32;
-
+float u;
+float mu_acc = 0;
+int mu_sta = 0;
 static const uint8_t PWM_ROT_PIN = 25;
 static const uint8_t ROT_PIN_DIR = 33;
 
@@ -78,7 +80,7 @@ uint8_t Encoder_PIn[2] = {16, 17};
 float ENCODER_DEGREES_PER_EDGE = 0.36445f; // degrees per edge, per your value
 
 // ------------------- PID GAIN ARRAY (for PID.setup) -------------------
-static float Gain[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd as you provided
+static float Gain[3] = {0.056f, 0.0000012f, 0.0f}; // Kp, Ki, Kd as you provided
 
 // ------------------- INITIAL (GLOBAL) VARIABLES -------------------
 static int currentstate=0;
