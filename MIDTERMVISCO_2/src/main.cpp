@@ -52,7 +52,7 @@ extern "C" void app_main()
             }
 
             float measured_rpm = enco.getSpeed();
-            currentRPM = measured_rpm;
+            currentRPM = measured_rpm*0.17;
             switch (currentstate)
             {
             case 0:
@@ -122,6 +122,7 @@ extern "C" void app_main()
                 lcd_put_cursor(0, 0);
                 lcd_send_string("Measure");
                 double SB1 = IV.read(ADC_READ_MV);
+                
                 float mu_rel = 6.25 * SB1 - 17.5; //
                 //formula for the float viscocity = m*SB1+Sb0
                 // 
