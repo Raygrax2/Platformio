@@ -18,9 +18,11 @@ extern "C"
 #include <stdint.h>
 #include <string.h>
 #include "SimpleRGB.h"
+#include "TCS34725.h"
 #include "QuadratureEncoder.h"
 #include "SimpleTimer.h"
 #include "Hbridge.h"
+#include "SimpleI2C.h"
 #include "SimpleGPIO.h"
 #include "SimpleADC.h"
 #include "PID_CAYETANO.h"
@@ -29,33 +31,14 @@ extern "C"
 #include "SimplePID.h"
 #include "SimplePWM.h"
 #include "Filter.h"
-enum ViscometerState {
-    STATE_POWER_ON = 0,
-    STATE_SAMPLE_PLACEMENT,
-    STATE_SAMPLE_POSITIONED,
-    STATE_CYLINDER_LOWERING,
-    STATE_STIR_LIQUID,
-    STATE_MEASURE_VISCOSITY,
-    STATE_MEASUREMENT_DISPLAY,
-    STATE_SAMPLE_REMOVAL,
-    STATE_CYLINDER_CLEANING,
-    STATE_CYLINDER_DRYING,
-    STATE_MANUAL_MOVEMENT,
-    STATE_PROCESS_RESTART,
-    STATE_COUNT
-};
-int current_state = STATE_POWER_ON;
-SimpleTimer timer;
-SimpleRGB RGB;
 
-uint8_t RGB_Pins[3] = {26,34,23};
-uint8_t RGB_CH[3] = {0,1,2};
-static TimerConfig PWM_Timer_RGB{
-    .timer = LEDC_TIMER_0,
-    .frequency = 650,
-    .bit_resolution = LEDC_TIMER_14_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
-};
+SimpleTimer timer;
+uint64_t prev_time;
+uint64_t current_time;
+uint64_t dt_us;
+uint16_t c,r,g,b; 
+SimpleI2C i2c;
+TCS34725 Colorsensor;
 uint64_t len = 0;
 
 SimpleUART UART(115200);

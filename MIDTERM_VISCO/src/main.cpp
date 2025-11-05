@@ -1,128 +1,65 @@
-// main.cpp
-#include "definitons.h" // make sure header name matches real file ("definitions.h")
-extern "C"
-{
-#include "i2c_lcd.h"
-}
+#include "TCS34725.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_task_wdt.h"
+#include "driver/i2c.h"
+#include <stdio.h>
+extern c{
+    #include "i2c_lcd.h"
+}
 
-static void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt(); }
+// I2C config — ajusta pines si tu board usa otros
+#define I2C_MASTER_NUM I2C_NUM_0
+#define I2C_MASTER_SDA_IO 22
+#define I2C_MASTER_SCL_IO 21
+#define I2C_MASTER_FREQ_HZ 100000 // recomiendo 100kHz estable
+#define I2C_MASTER_TX_BUF_DISABLE 0
+#define I2C_MASTER_RX_BUF_DISABLE 0
 
-// define the global state (move actual definition to one .cpp file only)
+// TCS registers
+#define TCS34725_CDATAL 0x14
 
-extern "C" void app_main()
+static esp_err_t i2c_master_init(i2c_port_t i2c_num, gpio_num_t sda, gpio_num_t scl, uint32_t freq_hz)
 {
+    i2c_config_t conf = {};
+    conf.mode = I2C_MODE_MASTER;
+    conf.sda_io_num = sda;
+    conf.scl_io_num = scl;
+    conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+    conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+    conf.master.clk_speed = freq_hz;
+    esp_err_t err = i2c_param_config(i2c_num, &conf);
+    if (err != ESP_OK) return err;
+    err = i2c_driver_install(i2c_num, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    return err;
+}
+
+extern "C" void app_main(void)
+{
+    // disable task watchdog if needed
     esp_task_wdt_deinit();
 
-    lcd_init();  // Initialize the LCD
-    lcd_clear(); // Clear the LCD screen
+    // init I2C driver
+    esp_err_t err = i2c_master_init(I2C_MASTER_NUM, (gpio_num_t)I2C_MASTER_SDA_IO, (gpio_num_t)I2C_MASTER_SCL_IO, I2C_MASTER_FREQ_HZ);
+    if (err != ESP_OK) {
+        printf("I2C init failed: %s\n", esp_err_to_name(err));
+        while (true) vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
-    timer.setup(timerinterrupt, "Timer");
-    timer.startPeriodic(10000);
+    // create sensor object and initialize
+    TCS34725 color;
+    color.begin(I2C_MASTER_NUM, 0x29); // 0x29 typical address
 
-    char Buff_UART[32];
-    float RPMS;
-    float Viscocity;
-    RGB.setup(RGB_Pins, RGB_CH, &PWM_Timer_RGB, 1);
-    // Show header once (don't clear it immediately)
-    lcd_put_cursor(0, 0);
-    lcd_send_string("Viscometer");
-    char BUff_MESSAGE_PROCESSED_1[32];
-    char BUff_MESSAGE_PROCESSED_2[32];
+    // configure sensor baseline (optional)
+    color.setIntegrationTime(0xD5); // ~101 ms
+    color.setGain(0x01);            // 4x
 
-    while (1)
-    {
-        if (timer.interruptAvailable())
-        {
-            // Clear first line and print the state message
-            len = UART.available();
+    printf("TCS34725 ready. Reading raw values...\n");
 
-            if (len)
-            {
-                UART.read(Buff_UART, len);
-                sscanf(Buff_UART, "%d,%f,%f", &current_state, &RPMS, &Viscocity);
-            }
-            lcd_put_cursor(0, 0);
-            lcd_clear();
-            lcd_put_cursor(0, 0);
-
-            switch (current_state)
-            {
-            case 0:
-                lcd_send_string("Welcome");
-                break;
-
-            case 1:
-                lcd_send_string("Place a Sample");
-
-                break;
-
-            case 2:
-                lcd_send_string("Sample OK");
-                break;
-
-            case 3:
-                lcd_send_string("Down cylinder");
-                break;
-
-            case 4:
-                lcd_send_string("Liquid Stirring");
-                break;
-
-            case 5:
-                lcd_send_string("Measuring...");
-                break;
-
-            case 6:
-                // Format floats with 1 decimal place
-                sprintf(BUff_MESSAGE_PROCESSED_1, "RPMS: %.1f", RPMS);
-                sprintf(BUff_MESSAGE_PROCESSED_2, "Visc: %.1f", Viscocity);
-
-                // Write first line
-                lcd_put_cursor(0, 0);
-                lcd_send_string("                "); // clear line
-                lcd_put_cursor(0, 0);
-                lcd_send_string(BUff_MESSAGE_PROCESSED_1);
-
-                // Write second line
-                lcd_put_cursor(1, 0);
-                lcd_send_string("                "); // clear line
-                lcd_put_cursor(1, 0);
-                lcd_send_string(BUff_MESSAGE_PROCESSED_2);
-                break;
-
-            case 7:
-                lcd_send_string("Remove sample");
-                break;
-
-            case 8:
-                lcd_send_string("Cleaning cylinder");
-
-                break;
-
-            case 9:
-                lcd_send_string("Drying cylinder");
-                break;
-
-            case 10:
-                lcd_send_string("Manual movement");
-                break;
-
-            case 11:
-                lcd_send_string("Restarting...");
-                break;
-
-            case 12:
-                lcd_send_string("Nigga");
-                break;
-
-            default:
-                lcd_send_string("Default");
-                break;
-            }
-            printf("%d\n", current_state);
-            // advance to next state (or change this to button-driven logic)
-        }
+    while (true) {
+        uint16_t c, r, g, b;
+        color.readRaw(c, r, g, b);
+        printf("RAW -> C: %u | R: %u | G: %u | B: %u\n", c, r, g, b);
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }

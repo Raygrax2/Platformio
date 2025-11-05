@@ -53,6 +53,7 @@ public:
     // Stop spinning motor immediately.
     void stop();
 private:
+    // members (encapsulated hardware)
     SimplePWM      pwmSpin;     // PWM used to drive motor (configured in setup)
     BDCMotor       motor;       // BDC motor wrapper that uses pwmSpin
     QuadratureEncoder encoder;  // local encoder object
