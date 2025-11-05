@@ -12,7 +12,6 @@ extern "C" void app_main()
 {
     // disable watchdog for long operations during dev
     esp_task_wdt_deinit();
-
     timer.setup(timerinterrupt, "Timer");
     timer.startPeriodic(1000); // 10,000 us = 10 ms tick
     JOY.setup(PinX, PinY, Button);
