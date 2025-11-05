@@ -41,7 +41,7 @@ uint8_t len = 0;
 uint8_t EncoderPIN[2] = {32, 14}; // Pines del encoder
 uint8_t AIN[2] = {27, 26};
 uint8_t CHA[2] = {0, 1};
-uint32_t dt = 5000; // 2 ms (consistent with timer period)
+uint32_t dt = 10000; // 10 ms
 
 // Constant floats
 float PID_GAINS[3] = {1.0f, 0.0f, 0.0f}; // Kp, Ki, Kd
@@ -54,10 +54,5 @@ float current_position = 0.0f;      // in degrees
 int current_mode = MODE_MANUAL_PWM; // default mode
 float ref = -70.0f;                 // reference position (deg)
 float u = 0.0f;
-
-// --- Filtros --- Not used now
-/* Filter LPF;
-float LPF_coeffs_a[2] = {1.0000f, -0.7608f}; // [a0, a1] where a0 = 1
-float LPF_coeffs_b[2] = {0.1196f, 0.1196f};  // [b0, b1] */
 
 #endif // __DEFINITIONS_H__
