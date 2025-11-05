@@ -12,9 +12,10 @@ private:
     float integral = 0.0f;
 
 public:
-    PID_CAYETANO(/* args */);
+    PID_CAYETANO();
     void setup(float Gains[3], float dt);
     float computedU(float error);
+    void reset();
 };
 
 #endif // __PID_CAYETANO_H__
