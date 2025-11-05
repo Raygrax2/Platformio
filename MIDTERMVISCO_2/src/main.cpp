@@ -14,8 +14,7 @@ extern "C" void app_main()
     esp_task_wdt_deinit();
     timer.setup(timerinterrupt, "Timer");
     timer.startPeriodic(1000); // 10,000 us = 10 ms tick
-    JOY.setup(PinX, PinY, Button);
-    JOY.calibrate(1000000); // 1 second calibration
+ 
     PWM_Stepper_ROT.setup(PWM_ROT_PIN, 0, &PWM_TimerA);
     PWM_Stepper_UP.setup(PWM_UP_PIN, 1, &PWM_UP_STEP);
     PWM_Stepper_ROT.setDuty(0.0f);
@@ -62,8 +61,9 @@ extern "C" void app_main()
             currentRPM = measured_rpm * 0.17;
             switch (currentstate)
             {
-            case 0:
-                PWM_Stepper_ROT.setDuty(0.0f);
+            case 4:
+            //Default    
+            PWM_Stepper_ROT.setDuty(0.0f);
                 PWM_Stepper_UP.setDuty(0.0f);
                 Motor_spin.setSpeed(0.0f);
                 lcd_clear();
@@ -71,10 +71,18 @@ extern "C" void app_main()
                 lcd_send_string("Welcome");
                 break;
 
-            case 1:
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Place a Sample");
+            case 0:
+                //Up and down
+                uint64_t current_time_2 = esp_timer_get_time();
+                if (current_time_2-prev_time_2 >= time_up10cm){
+                    PWM_Stepper_UP.setDuty(0.0f);
+                    
+                    
+                }
+                else {
+                    PWM_Stepper_UP.setFrequency(650);
+
+                }
                 break;
 
             case 2:
