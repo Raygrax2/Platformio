@@ -1,20 +1,37 @@
+// Stepper.h
 #ifndef __STEPPER_H__
 #define __STEPPER_H__
 
-#include "SimplePWM.h"
 #include "SimpleGPIO.h"
-#include "math.h"
+#include "SimplePWM.h"
 
 class Stepper
 {
+private:
+    SimpleGPIO dir_pin;
+    SimplePWM pwm_step;
+    
+    float degrees_per_step;
+    float max_frequency;
+    float min_frequency;
+    float deadband;
+    
+    float current_angle;
+    float target_angle;
+    int current_direction;
+    float current_frequency;
+    float dt_sec;
+    
+    void update();
+    
 public:
     Stepper();
-    void setup(const uint8_t drive_pins[3], const uint8_t stepper_ch, TimerConfig stepper_timer);
-    void setSpeed(float speed);
-
-private:
-    SimpleGPIO dir;
-    SimplePWM step;
+    
+    void setup(uint8_t dir_gpio, uint8_t step_gpio,
+               uint8_t pwm_channel, TimerConfig* timer_config,
+               float deg_per_step, uint64_t dt_us);
+    
+    void moveDegrees(float degrees);
 };
 
 #endif // __STEPPER_H__
