@@ -12,16 +12,9 @@ extern "C" void app_main()
 
     timer.setup(timerinterrupt, "Timer");
     timer.startPeriodic(10000); // 10,000 us = 10 ms tick
-    PWM_Stepper_ROT.setup(PWM_ROT_PIN, 0, &PWM_TimerA);
-    PWM_Stepper_UP.setup(PWM_UP_PIN, 1, &PWM_UP_STEP);
-    PWM_Stepper_ROT.setDuty(0.0f);
-    PWM_Stepper_UP.setDuty(0.0f);
-    STEPPER_ROT_DIR.setup(ROT_PIN_DIR, GPO);
-    STEPPER_UP_DIR.setup(UP_PIN_DIR, GPO);
-    char Buffer_message_1[32];
-    char Buffer_message_2[32];
-    STEPPER_ROT_DIR.set(1);
-    STEPPER_UP_DIR.set(1);
+    Stepper Stepper_Up;
+    Stepper Stepper_Rot;
+    Stepper_Up.setup()
     Motor_spin.setup(Spin_MotorPIns, Spin_MotorCH, PWM_Spin);
     enco.setup(Encoder_PIn, ENCODER_DEGREES_PER_EDGE);
     PID.setup(Gain, 10000);
@@ -39,6 +32,7 @@ extern "C" void app_main()
             {
             case 0:  //Elevation
                 PWM_Stepper_UP.setDuty(0.0f);
+
                 break;
 
             case 1:  //Rotation

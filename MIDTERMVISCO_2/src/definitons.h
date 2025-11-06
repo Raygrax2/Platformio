@@ -17,6 +17,7 @@
 #include "Joystick.h"
 #include "SimplePWM.h"
 #include "BDCMotor.h"
+#include "Stepper.h"
 #include "QuadratureEncoder.h"
 #include "PID_CAYETANO.h"
 #include "SimpleUART.h"
