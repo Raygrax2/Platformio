@@ -6,8 +6,9 @@
 #include <string.h>
 
 // Timer ISR
-static void IRAM_ATTR timerinterrupt(void *arg) { 
-    timer.setInterrupt(); 
+static void IRAM_ATTR timerinterrupt(void *arg)
+{
+    timer.setInterrupt();
 }
 
 extern "C" void app_main()
@@ -18,35 +19,35 @@ extern "C" void app_main()
     // ========================================================================
     // HARDWARE INITIALIZATION
     // ========================================================================
-    
+
     // Timer setup
     timer.setup(timerinterrupt, "MainTimer");
     timer.startPeriodic(dt);
 
     // Stepper motors
-    Stepper_Up.setup(STEPPER_UP_DIR_PIN, STEPPER_UP_PWM_PIN, 
-                     0, &PWM_STEPPER_UP_TIMER, 
+    Stepper_Up.setup(STEPPER_UP_DIR_PIN, STEPPER_UP_PWM_PIN,
+                     0, &PWM_STEPPER_UP_TIMER,
                      STEPPER_DEGREES_PER_STEP, dt);
-    
-    Stepper_Rot.setup(STEPPER_ROT_DIR_PIN, STEPPER_ROT_PWM_PIN, 
-                      1, &PWM_STEPPER_ROT_TIMER, 
+
+    Stepper_Rot.setup(STEPPER_ROT_DIR_PIN, STEPPER_ROT_PWM_PIN,
+                      1, &PWM_STEPPER_ROT_TIMER,
                       STEPPER_DEGREES_PER_STEP, dt);
 
     // BDC Motors
     uint8_t spin_pins[2] = {SPIN_MOTOR_PIN_A, SPIN_MOTOR_PIN_B};
     uint8_t spin_channels[2] = {2, 3};
-    Motor_spin.setup(spin_pins, spin_channels, PWM_SPIN_MOTOR_TIMER);
+    MotorS.setup(spin_pins, spin_channels);
 
     uint8_t pump_pins[2] = {PUMP_PIN_A, PUMP_PIN_B};
     uint8_t pump_channels[2] = {4, 5};
-    Pump.setup(pump_pins, pump_channels, PWM_PUMP_TIMER);
+    Pump.setup(pump_pins, pump_channels);
 
-    // Encoder
+    // Encoder2
     uint8_t encoder_pins[2] = {ENCODER_PIN_A, ENCODER_PIN_B};
     enco.setup(encoder_pins, ENCODER_DEGREES_PER_EDGE);
 
     // PID controller
-    PID.setup(PID_GAINS, dt);
+    PID.setup(PID_GAINS, dt / 1000000.0f);
 
     // Color sensor
     Color_sensor.begin(I2C_NUM_0, 0x29);
@@ -56,7 +57,6 @@ extern "C" void app_main()
     emg_relay.set(0); // Initially not stopped
 
     // Clear buffers
-    memset(rxbuf, 0, sizeof(rxbuf));
 
     // ========================================================================
     // PUMP TIMING VARIABLES
@@ -86,7 +86,7 @@ extern "C" void app_main()
             telemetry.speed = enco.getSpeed();
             telemetry.pos_x = enco.getAngle();
             telemetry.pos_y = Stepper_Up.getPosition();
-            
+
             Color_sensor.readRaw(sensor_c, sensor_r, sensor_g, sensor_b);
             telemetry.R = sensor_r;
             telemetry.G = sensor_g;
@@ -99,14 +99,23 @@ extern "C" void app_main()
             if (available > 0)
             {
                 UART_MESSAGE.read(rxbuf, available);
-                
-                int parsed = sscanf(rxbuf, "%f,%d,%d,%f,%f",
-                                   &control.ref_rpms,
-                                   &control.emergency_stop,
-                                   &control.send_water,
-                                   &control.ref_pos_x,
-                                   &control.ref_pos_y);
 
+                int parsed = sscanf(rxbuf, "%d,%f,%d,%d,%f,%f\n",
+                                    &current_state,
+                                    &control.ref_rpms,
+                                    &control.emergency_stop,
+                                    &control.send_water,
+                                    &control.ref_pos_x,
+                                    &control.ref_pos_y);
+                target_up_degrees = control.ref_pos_y;
+                target_rot_degrees = control.ref_pos_x;
+                printf("%d,%.2f,%d,%d,%.2f,%.2f\n",
+                       current_state,
+                       (double)control.ref_rpms,
+                       control.emergency_stop,
+                       control.send_water,
+                       (double)control.ref_pos_x,
+                       (double)control.ref_pos_y);
                 if (parsed >= 1)
                 {
                     // Handle emergency stop immediately
@@ -114,7 +123,7 @@ extern "C" void app_main()
                     {
                         emg_relay.set(1);
                         current_state = STATE_IDLE;
-                        Motor_spin.setSpeed(0.0f);
+                        MotorS.setSpeed(0.0f);
                         Pump.setSpeed(0.0f);
                         printf("EMERGENCY STOP ACTIVATED\n");
                     }
@@ -123,12 +132,14 @@ extern "C" void app_main()
                         emg_relay.set(0);
                     }
                 }
-                
+
                 memset(rxbuf, 0, sizeof(rxbuf));
             }
-
+            Stepper_Up.update();
+            Stepper_Rot.update();
             // ================================================================
             // 3. STATE MACHINE
+
             // ================================================================
             switch (current_state)
             {
@@ -137,7 +148,7 @@ extern "C" void app_main()
                 if (target_up_degrees != 0.0f)
                 {
                     Stepper_Up.moveDegrees(target_up_degrees);
-                    target_up_degrees = 0.0f; // Clear after execution
+                    printf("%f", Stepper_Up.getPosition());
                 }
                 break;
 
@@ -146,7 +157,6 @@ extern "C" void app_main()
                 if (target_rot_degrees != 0.0f)
                 {
                     Stepper_Rot.moveDegrees(target_rot_degrees);
-                    target_rot_degrees = 0.0f;
                 }
                 break;
 
@@ -183,7 +193,9 @@ extern "C" void app_main()
                 {
                     float error = control.ref_rpms - telemetry.speed;
                     float output = PID.computedU(error);
-                    Motor_spin.setSpeed(output);
+                    printf("Coumputo el u %f, enco =  %f\n", output, enco.getSpeed());
+
+                    MotorS.setSpeed(output);
                 }
                 break;
 
@@ -196,9 +208,9 @@ extern "C" void app_main()
             // ================================================================
             // 4. SEND TELEMETRY
             // ================================================================
-            printf("%d,%d,%d,%.2f,%.2f,%.2f\n",
-                   telemetry.R, telemetry.G, telemetry.B,
-                   telemetry.pos_x, telemetry.pos_y, telemetry.speed);
+            // printf("%d,%d,%d,%.2f,%.2f,%.2f\n",
+            //   telemetry.R, telemetry.G, telemetry.B,
+            //   telemetry.pos_x, telemetry.pos_y, telemetry.speed);
 
         } // timer tick
     } // while(1)

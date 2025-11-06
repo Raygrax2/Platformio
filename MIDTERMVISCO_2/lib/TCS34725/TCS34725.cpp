@@ -4,6 +4,11 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include <stdio.h>
+#include "driver/i2c.h"
+
+#define I2C_SDA_PIN 21
+#define I2C_SCL_PIN 22
+#define I2C_FREQ_HZ 100000 // 100 kHz standard speed
 
 TCS34725::TCS34725() : _i2c_num(I2C_NUM_0), _address(0x29) {}
 
@@ -12,12 +17,28 @@ void TCS34725::begin(i2c_port_t i2c_num, uint8_t address)
     _i2c_num = i2c_num;
     _address = address;
 
+    // Configure I2C if not already done
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = I2C_SDA_PIN,
+        .scl_io_num = I2C_SCL_PIN,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master = {
+            .clk_speed = I2C_FREQ_HZ,
+        },
+        .clk_flags = 0,
+    };
+    i2c_param_config(_i2c_num, &conf);
+    i2c_driver_install(_i2c_num, I2C_MODE_MASTER, 0, 0, 0);
+
     // Power on (PON), wait, then enable ADC (AEN)
     write8(0x00, 0x01); // ENABLE = PON
     vTaskDelay(pdMS_TO_TICKS(3));
     write8(0x00, 0x03); // ENABLE = PON + AEN
     vTaskDelay(pdMS_TO_TICKS(700)); // allow initial integration
 }
+
 
 void TCS34725::setIntegrationTime(uint8_t atime)
 {

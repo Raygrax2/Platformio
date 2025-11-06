@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "SimpleTimer.h"
 #include "SimpleGPIO.h"
+#include "HBridge.h"
 #include "BDCMotor.h"
 #include "SimplePWM.h"
 #include "Stepper.h"
@@ -15,6 +16,8 @@
 #include "PID_CAYETANO.h"
 #include "SimpleUART.h"
 #include "TCS34725.h"
+#include "driver/i2c.h"
+
 
 // ============================================================================
 // TIMING CONFIGURATION
@@ -32,8 +35,8 @@ static const uint8_t STEPPER_ROT_DIR_PIN = 19;  // GPIO output
 static const uint8_t STEPPER_ROT_PWM_PIN = 25;  // PWM capable
 
 // BDC Motor (Spin) Pins
-static const uint8_t SPIN_MOTOR_PIN_A = 27;     // PWM capable
-static const uint8_t SPIN_MOTOR_PIN_B = 14;     // PWM capable
+uint8_t SPIN_MOTOR_PIN_A = 27;     // PWM capable
+uint8_t SPIN_MOTOR_PIN_B = 14;     // PWM capable
 
 // Pump Motor Pins
 static const uint8_t PUMP_PIN_A = 26;           // PWM capable (changed from 15 - conflicts)
@@ -70,15 +73,11 @@ static TimerConfig PWM_STEPPER_ROT_TIMER{
 static TimerConfig PWM_SPIN_MOTOR_TIMER{
     .timer = LEDC_TIMER_2,
     .frequency = 20000,
-    .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
 };
 
 static TimerConfig PWM_PUMP_TIMER{
     .timer = LEDC_TIMER_3,
     .frequency = 20000,
-    .bit_resolution = LEDC_TIMER_10_BIT,
-    .mode = LEDC_LOW_SPEED_MODE
 };
 
 // ============================================================================
@@ -98,8 +97,8 @@ static float PID_GAINS[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd
 static SimpleTimer timer;
 static Stepper Stepper_Up;
 static Stepper Stepper_Rot;
-static BDCMotor Motor_spin;
-static BDCMotor Pump;
+static HBridge MotorS;
+static HBridge Pump;
 static QuadratureEncoder enco;
 static PID_CAYETANO PID;
 static SimpleUART UART_MESSAGE(115200);
