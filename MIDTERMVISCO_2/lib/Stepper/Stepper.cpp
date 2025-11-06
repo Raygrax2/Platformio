@@ -86,3 +86,7 @@ void Stepper::update()
         current_angle = target_angle;
     }
 }
+float Stepper::getPosition()
+{
+    return current_angle;
+}

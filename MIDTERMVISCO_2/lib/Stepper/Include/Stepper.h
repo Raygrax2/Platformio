@@ -32,6 +32,8 @@ public:
                float deg_per_step, uint64_t dt_us);
     
     void moveDegrees(float degrees);
+    float getPosition() ;
+
 };
 
 #endif // __STEPPER_H__
