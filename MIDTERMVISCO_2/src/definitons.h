@@ -1,15 +1,11 @@
+// ============================================================================
+// definitions.h
+// ============================================================================
 #ifndef __DEFINITIONS_H__
 #define __DEFINITIONS_H__
 
-/*
-  definitions.h
-  Minimal global constants, pin definitions, object declarations and initial variables.
-  Only items referenced by main.cpp are declared here to keep it efficient.
-*/
-
 #include <stdio.h>
 #include <stdint.h>
-
 #include "SimpleTimer.h"
 #include "SimpleGPIO.h"
 #include "BDCMotor.h"
@@ -20,106 +16,143 @@
 #include "SimpleUART.h"
 #include "TCS34725.h"
 
-// ------------------- TIMERS / PWM CONFIG -------------------
-static TimerConfig PWM_TimerA{
+// ============================================================================
+// TIMING CONFIGURATION
+// ============================================================================
+static const uint32_t dt = 10000U; // 10ms tick period in microseconds
+
+// ============================================================================
+// PIN DEFINITIONS (ESP32 Compatible)
+// ============================================================================
+
+// Stepper Motor Pins
+static const uint8_t STEPPER_UP_DIR_PIN = 33;   // GPIO output
+static const uint8_t STEPPER_UP_PWM_PIN = 18;   // PWM capable
+static const uint8_t STEPPER_ROT_DIR_PIN = 19;  // GPIO output
+static const uint8_t STEPPER_ROT_PWM_PIN = 25;  // PWM capable
+
+// BDC Motor (Spin) Pins
+static const uint8_t SPIN_MOTOR_PIN_A = 27;     // PWM capable
+static const uint8_t SPIN_MOTOR_PIN_B = 14;     // PWM capable
+
+// Pump Motor Pins
+static const uint8_t PUMP_PIN_A = 26;           // PWM capable (changed from 15 - conflicts)
+static const uint8_t PUMP_PIN_B = 13;           // PWM capable
+
+// Encoder Pins
+static const uint8_t ENCODER_PIN_A = 32;        // Input (changed from 16)
+static const uint8_t ENCODER_PIN_B = 35;        // Input (changed from 17)
+
+// Emergency Stop Pin
+static const uint8_t EMERGENCY_STOP_PIN = 23;   // GPIO output (changed from 8 - doesn't exist)
+
+// I2C Pins for Color Sensor (default ESP32 I2C)
+static const uint8_t I2C_SDA_PIN = 21;          // I2C SDA
+static const uint8_t I2C_SCL_PIN = 22;          // I2C SCL
+
+// ============================================================================
+// PWM TIMER CONFIGURATIONS
+// ============================================================================
+static TimerConfig PWM_STEPPER_UP_TIMER{
     .timer = LEDC_TIMER_0,
     .frequency = 650,
-    .bit_resolution = LEDC_TIMER_14_BIT,
+    .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
 
-static TimerConfig PWM_UP_STEP{
+static TimerConfig PWM_STEPPER_ROT_TIMER{
     .timer = LEDC_TIMER_1,
     .frequency = 650,
-    .bit_resolution = LEDC_TIMER_14_BIT,
+    .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
 
-static TimerConfig PWM_Spin{
+static TimerConfig PWM_SPIN_MOTOR_TIMER{
     .timer = LEDC_TIMER_2,
-    .frequency = 2000,
-    .bit_resolution = LEDC_TIMER_14_BIT,
+    .frequency = 20000,
+    .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
-static TimerConfig PUMP_PWM_TIMER{
-    .timer = LEDC_TIMER_2,
-    .frequency = 2000,
-    .bit_resolution = LEDC_TIMER_14_BIT,
+
+static TimerConfig PWM_PUMP_TIMER{
+    .timer = LEDC_TIMER_3,
+    .frequency = 20000,
+    .bit_resolution = LEDC_TIMER_10_BIT,
     .mode = LEDC_LOW_SPEED_MODE
 };
-// ------------------- GLOBAL OBJECTS -------------------
+
+// ============================================================================
+// HARDWARE PARAMETERS
+// ============================================================================
+static const float STEPPER_DEGREES_PER_STEP = 1.8f;
+static const float ENCODER_DEGREES_PER_EDGE = 0.36445f;
+
+// ============================================================================
+// PID CONFIGURATION
+// ============================================================================
+static float PID_GAINS[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd
+
+// ============================================================================
+// GLOBAL OBJECTS
+// ============================================================================
 static SimpleTimer timer;
-static TCS34725 Color_sensor;
-static SimplePWM PWM_Stepper_UP;
+static Stepper Stepper_Up;
+static Stepper Stepper_Rot;
 static BDCMotor Motor_spin;
 static BDCMotor Pump;
-static SimplePWM PWM_Stepper_ROT;
-static SimpleGPIO STEPPER_UP_DIR;
-static SimpleGPIO STEPPER_ROT_DIR;
-static SimpleGPIO emg_relay;
-static Stepper Stepper_Up;              // your Stepper wrapper
-static Stepper Stepper_Rot;
 static QuadratureEncoder enco;
 static PID_CAYETANO PID;
 static SimpleUART UART_MESSAGE(115200);
+static TCS34725 Color_sensor;
+static SimpleGPIO emg_relay;
 
-// ------------------- PINS & HW CONSTANTS -------------------
-static const uint32_t dt = 10000U;      // 10 ms tick (microseconds passed to timer.startPeriodic)
-static const uint8_t INT_STEP_PIN = 5;  // external interrupt encoder pin (example)
-static const uint8_t PWM_UP_PIN = 18;
-static const uint8_t PWM_ROT_PIN = 25;
-static const uint8_t UP_PIN_DIR = 19;
-static const uint8_t ROT_PIN_DIR = 33;
-static const uint8_t Emg_stop_PIn = 8;      // pump output pin example
-static const uint8_t AIN[2] = {14,17};
-static const uint8_t Pump_PIN[2] = {14,17};
+// ============================================================================
+// COMMUNICATION VARIABLES
+// ============================================================================
 
-
-static const uint8_t BDC_Motor_CH [2] = {0,1};
-static const uint8_t Pump_CH [2] = {2,3};
-
-
-
-
-
-// Encoder pins and scale (fill with your actual pin numbers if different)
-static uint8_t EncoderPins[2] = {16, 17};
-static const float ENCODER_DEGREES_PER_EDGE = 0.36445f; // degrees per edge (from earlier value)
-
-// Stepper params used for setup
-static const float STEPPER_MICROSTEP_DEG = 1.8f; // degrees per step (full step)
-
-// PID default gains (can be tuned)
-static float PID_GAINS[3] = {1.5f, 0.5f, 0.5f};
-
-// ------------------- COMM & CONTROL VARIABLES (initialized) -------------------
-// Send buffer elements (R, G, B)
-uint16_t r = 0;
-uint16_t g = 0;
-uint16_t b = 0;
-uint16_t c = 0;
-
-static int send_R = 0;
-static int send_G = 0;
-static int send_B = 0;
-
-// Position and speed to send
-static float send_posx = 0.0f;
-static float send_posy = 0.0f;
-static float send_speed = 0.0f;
-
-// Received control values
-static float recv_ref_rpms = 0.0f;
-static int recv_emergency_stop = 0; // 0 = OK, 1 = stop
-static int recv_send_water = 0;     // 0/1
-static float recv_ref_posx = 0.0f;
-static float recv_ref_posy = 0.0f;
-
-// State machine
-static int currentstate = 0;
-
-// Misc telemetry buffer (for printf formatting if needed)
-static char txbuf[128];
+// Receive buffer
 static char rxbuf[128];
 
+// Sensor data (RGB color sensor)
+static uint16_t sensor_r = 0;
+static uint16_t sensor_g = 0;
+static uint16_t sensor_b = 0;
+static uint16_t sensor_c = 0;
+
+// Data to send to LabVIEW
+struct TelemetryData {
+    int R;
+    int G;
+    int B;
+    float pos_x;
+    float pos_y;
+    float speed;
+};
+static TelemetryData telemetry = {0, 0, 0, 0.0f, 0.0f, 0.0f};
+
+// Data received from LabVIEW
+struct ControlData {
+    float ref_rpms;
+    int emergency_stop;
+    int send_water;
+    float ref_pos_x;
+    float ref_pos_y;
+};
+static ControlData control = {0.0f, 0, 0, 0.0f, 0.0f};
+
+// State machine
+static int current_state = 0;
+
+// ============================================================================
+// STATE DEFINITIONS
+// ============================================================================
+enum SystemState {
+    STATE_ELEVATION = 0,
+    STATE_ROTATION = 1,
+    STATE_PUMP = 2,
+    STATE_VELOCITY_CONTROL = 3,
+    STATE_IDLE = 4
+};
+
 #endif // __DEFINITIONS_H__
+
