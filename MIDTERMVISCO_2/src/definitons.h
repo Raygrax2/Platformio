@@ -83,11 +83,17 @@ static float Gain[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd as you provided
 // ------------------- INITIAL (GLOBAL) VARIABLES -------------------
 static int currentstate=0;
 float currentRPM;
-static float currentViscosityCP = 0.0f;
-float error; 
+static float currentViscosityCP = 0.0f; 
 uint64_t len = 0;
 float mu_rel = 0.0f;
 // UART buffer for formatting if needed
 static char Buffer[64];
+
+float error = 0.0f;
+float speed_raw = 0.0f;
+float current_position = 0.0f;      // in degrees
+int current_mode = MODE_MANUAL_PWM; // default mode
+float ref = -70.0f;                 // reference position (deg)
+float u = 0.0f;
 
 #endif // __DEFINITIONS_H__
