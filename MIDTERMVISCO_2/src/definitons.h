@@ -16,13 +16,14 @@
 #include "PID_CAYETANO.h"
 #include "SimpleUART.h"
 #include "TCS34725.h"
+#include "SimpleRGB.h"
 #include "driver/i2c.h"
 
 
 // ============================================================================
 // TIMING CONFIGURATION
 // ============================================================================
-static const uint32_t dt = 10000U; // 10ms tick period in microseconds
+static const uint32_t dt = 50; // 10ms tick period in microseconds
 
 // ============================================================================
 // PIN DEFINITIONS (ESP32 Compatible)
@@ -47,11 +48,19 @@ static const uint8_t ENCODER_PIN_A = 32;        // Input (changed from 16)
 static const uint8_t ENCODER_PIN_B = 35;        // Input (changed from 17)
 
 // Emergency Stop Pin
-static const uint8_t EMERGENCY_STOP_PIN = 23;   // GPIO output (changed from 8 - doesn't exist)
+static const uint8_t EMERGENCY_STOP_PIN = 5;   // GPIO output (changed from 8 - doesn't exist)
+static const uint8_t Buzz_PIN = 15;   // GPIO output (changed from 8 - doesn't exist)
 
 // I2C Pins for Color Sensor (default ESP32 I2C)
 static const uint8_t I2C_SDA_PIN = 21;          // I2C SDA
 static const uint8_t I2C_SCL_PIN = 22;          // I2C SCL
+uint8_t Pins_rgb[3] = {4,16,17};
+uint8_t RGB_CH[3] = {6,7,8};
+
+
+
+
+
 
 // ============================================================================
 // PWM TIMER CONFIGURATIONS
@@ -79,6 +88,10 @@ static TimerConfig PWM_PUMP_TIMER{
     .timer = LEDC_TIMER_3,
     .frequency = 20000,
 };
+static TimerConfig PWM_RGB{
+    .timer = LEDC_TIMER_3,
+    .frequency = 20000,
+};
 
 // ============================================================================
 // HARDWARE PARAMETERS
@@ -89,7 +102,7 @@ static const float ENCODER_DEGREES_PER_EDGE = 0.36445f;
 // ============================================================================
 // PID CONFIGURATION
 // ============================================================================
-static float PID_GAINS[3] = {1.5f, 0.5f, 0.5f}; // Kp, Ki, Kd
+static float PID_GAINS[3] = {0.1f, 1.0f, 0.0f}; // Kp, Ki, Kd
 
 // ============================================================================
 // GLOBAL OBJECTS
@@ -98,12 +111,14 @@ static SimpleTimer timer;
 static Stepper Stepper_Up;
 static Stepper Stepper_Rot;
 static HBridge MotorS;
+
 static HBridge Pump;
 static QuadratureEncoder enco;
 static PID_CAYETANO PID;
 static SimpleUART UART_MESSAGE(115200);
 static TCS34725 Color_sensor;
-static SimpleGPIO emg_relay;
+static SimpleGPIO emg_relay, Buzz;
+SimpleRGB RGB;
 
 // ============================================================================
 // COMMUNICATION VARIABLES

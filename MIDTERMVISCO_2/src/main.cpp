@@ -37,7 +37,7 @@ extern "C" void app_main()
     uint8_t spin_pins[2] = {SPIN_MOTOR_PIN_A, SPIN_MOTOR_PIN_B};
     uint8_t spin_channels[2] = {2, 3};
     MotorS.setup(spin_pins, spin_channels);
-
+    Buzz.setup(Buzz_PIN, GPO);
     uint8_t pump_pins[2] = {PUMP_PIN_A, PUMP_PIN_B};
     uint8_t pump_channels[2] = {4, 5};
     Pump.setup(pump_pins, pump_channels);
@@ -45,9 +45,10 @@ extern "C" void app_main()
     // Encoder2
     uint8_t encoder_pins[2] = {ENCODER_PIN_A, ENCODER_PIN_B};
     enco.setup(encoder_pins, ENCODER_DEGREES_PER_EDGE);
+    RGB.setup(Pins_rgb, RGB_CH, &PWM_RGB, 1);
 
     // PID controller
-    PID.setup(PID_GAINS, dt / 1000000.0f);
+    PID.setup(PID_GAINS, dt);
 
     // Color sensor
     Color_sensor.begin(I2C_NUM_0, 0x29);
@@ -84,14 +85,44 @@ extern "C" void app_main()
             // 1. READ SENSORS
             // ================================================================
             telemetry.speed = enco.getSpeed();
-            telemetry.pos_x = enco.getAngle();
+            telemetry.pos_x = Stepper_Rot.getPosition();
             telemetry.pos_y = Stepper_Up.getPosition();
 
             Color_sensor.readRaw(sensor_c, sensor_r, sensor_g, sensor_b);
             telemetry.R = sensor_r;
             telemetry.G = sensor_g;
             telemetry.B = sensor_b;
+            // Referencias medidas (blanco / negro)
+            const float W_R = 2046.0f, W_G = 1969.0f, W_B = 1943.0f;
+            const float K_R = 190.0f, K_G = 143.0f, K_B = 100.0f;
 
+            // Lecturas crudas
+            float r_raw = (float)sensor_r;
+            float g_raw = (float)sensor_g;
+            float b_raw = (float)sensor_b;
+
+            // Mapeo lineal (clamp entre 0 y 1)
+            auto map01 = [](float v, float vmin, float vmax) -> float
+            {
+                if (vmax <= vmin)
+                    return 0.0f;
+                float t = (v - vmin) / (vmax - vmin);
+                if (t < 0.0f)
+                    return 0.0f;
+                if (t > 1.0f)
+                    return 1.0f;
+                return t;
+            };
+
+            float rn = map01(r_raw, K_R, W_R);
+            float gn = map01(g_raw, K_G, W_G);
+            float bn = map01(b_raw, K_B, W_B);
+
+            // Escalar a 0-255 y asignar a telemetry (enteros)
+            telemetry.R = (int)(rn * 255.0f + 0.5f);
+            telemetry.G = (int)(gn * 255.0f + 0.5f);
+            telemetry.B = (int)(bn * 255.0f + 0.5f);
+            RGB.setColor(telemetry.R, telemetry.G, telemetry.B);
             // ================================================================
             // 2. RECEIVE UART COMMANDS
             // ================================================================
@@ -122,10 +153,10 @@ extern "C" void app_main()
                     if (control.emergency_stop != 0)
                     {
                         emg_relay.set(1);
-                        current_state = STATE_IDLE;
                         MotorS.setSpeed(0.0f);
                         Pump.setSpeed(0.0f);
                         printf("EMERGENCY STOP ACTIVATED\n");
+                        current_state = STATE_IDLE;
                     }
                     else
                     {
@@ -148,7 +179,6 @@ extern "C" void app_main()
                 if (target_up_degrees != 0.0f)
                 {
                     Stepper_Up.moveDegrees(target_up_degrees);
-                    printf("%f", Stepper_Up.getPosition());
                 }
                 break;
 
@@ -162,38 +192,20 @@ extern "C" void app_main()
 
             case STATE_PUMP:
                 // Pump control with timing
-                if (control.send_water != 0)
-                {
-                    if (!pump_active)
-                    {
-                        Pump.setSpeed(100.0f);
-                        pump_start_time = esp_timer_get_time();
-                        pump_active = true;
-                    }
-                    else
-                    {
-                        uint64_t elapsed = esp_timer_get_time() - pump_start_time;
-                        if (elapsed >= PUMP_DURATION_US)
-                        {
-                            Pump.setSpeed(0.0f);
-                            pump_active = false;
-                            control.send_water = 0;
-                        }
-                    }
-                }
-                else
-                {
-                    Pump.setSpeed(0.0f);
-                    pump_active = false;
-                }
+                if (control.send_water==1){
+                Pump.setSpeed(40.0);
+            }
+            else 
+            Pump.setSpeed(0.0f);
+
                 break;
 
             case STATE_VELOCITY_CONTROL:
                 // PID velocity control
                 {
-                    float error = control.ref_rpms - telemetry.speed;
+                    float error = control.ref_rpms - enco.getSpeed();
+
                     float output = PID.computedU(error);
-                    printf("Coumputo el u %f, enco =  %f\n", output, enco.getSpeed());
 
                     MotorS.setSpeed(output);
                 }
@@ -201,16 +213,17 @@ extern "C" void app_main()
 
             case STATE_IDLE:
             default:
-                // Do nothing
+                Buzz.set(1);
+
                 break;
             }
 
             // ================================================================
             // 4. SEND TELEMETRY
             // ================================================================
-            // printf("%d,%d,%d,%.2f,%.2f,%.2f\n",
-            //   telemetry.R, telemetry.G, telemetry.B,
-            //   telemetry.pos_x, telemetry.pos_y, telemetry.speed);
+            printf("%d,%d,%d,%.2f,%.2f,%.2f,%d\n",
+                   telemetry.R, telemetry.G, telemetry.B,
+                   telemetry.pos_x, telemetry.pos_y, telemetry.speed, emg_relay.get());
 
         } // timer tick
     } // while(1)
