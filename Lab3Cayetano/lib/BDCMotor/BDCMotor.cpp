@@ -19,7 +19,7 @@ void BDCMotor::setSpeed(float Speed)
     }
     else
     {
-        in[1].setDuty(-1.0f*Speed);
+        in[1].setDuty(1.0f*Speed);
         in[0].setDuty(0.0f);
     }
 }

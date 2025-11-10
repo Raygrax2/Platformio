@@ -22,16 +22,18 @@ private:
     float current_frequency;
     float dt_sec;
     
-    void update();
     
-public:
+    public:
     Stepper();
     
     void setup(uint8_t dir_gpio, uint8_t step_gpio,
-               uint8_t pwm_channel, TimerConfig* timer_config,
-               float deg_per_step, uint64_t dt_us);
-    
+        uint8_t pwm_channel, TimerConfig* timer_config,
+        float deg_per_step, uint64_t dt_us);
+        
+        void update();
     void moveDegrees(float degrees);
+    float getPosition() ;
+
 };
 
 #endif // __STEPPER_H__

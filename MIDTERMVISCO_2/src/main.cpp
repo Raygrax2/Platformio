@@ -1,275 +1,230 @@
+// ============================================================================
+// main.cpp
+// ============================================================================
 #include "definitons.h"
 #include "esp_timer.h"
-extern "C"
-{
-#include "i2c_lcd.h"
-}
+#include <string.h>
 
-// Timer ISR wrapper used by SimpleTimer
-static void IRAM_ATTR timerinterrupt(void *arg) { timer.setInterrupt(); }
+// Timer ISR
+static void IRAM_ATTR timerinterrupt(void *arg)
+{
+    timer.setInterrupt();
+}
 
 extern "C" void app_main()
 {
-    // disable watchdog for long operations during dev
+    // Disable watchdog
     esp_task_wdt_deinit();
-    timer.setup(timerinterrupt, "Timer");
-    timer.startPeriodic(1000); // 10,000 us = 10 ms tick
-    JOY.setup(PinX, PinY, Button);
-    JOY.calibrate(1000000); // 1 second calibration
-    PWM_Stepper_ROT.setup(PWM_ROT_PIN, 0, &PWM_TimerA);
-    PWM_Stepper_UP.setup(PWM_UP_PIN, 1, &PWM_UP_STEP);
-    PWM_Stepper_ROT.setDuty(0.0f);
-    PWM_Stepper_UP.setDuty(0.0f);
-    STEPPER_ROT_DIR.setup(ROT_PIN_DIR, GPO);
-    STEPPER_UP_DIR.setup(UP_PIN_DIR, GPO);
-    PID.setup(Gain, 1000 / 1000000);
-    char Buffer_message_1[32];
-    char Buffer_message_2[32];
-    IV.setup(IB_PIN);
-    uint64_t prev_time = esp_timer_get_time();
-    uint64_t current_time;
-    float SB1 = 0;
-    float mu_rel = 0;
-    float mu_acc = 0;
-    float mu_sta = 0;
-    float mu_tot = 0;
 
-    STEPPER_ROT_DIR.set(1);
-    STEPPER_UP_DIR.set(1);
-    Motor_spin.setup(Spin_MotorPIns, Spin_MotorCH, PWM_Spin);
-    enco.setup(Encoder_PIn, ENCODER_DEGREES_PER_EDGE);
-    PID.setup(Gain, 10000);
-    lcd_init();
-    lcd_clear();
-    lcd_put_cursor(0, 0);
+    // ========================================================================
+    // HARDWARE INITIALIZATION
+    // ========================================================================
 
-    // -------------------- MAIN LOOP --------------------
+    // Timer setup
+    timer.setup(timerinterrupt, "MainTimer");
+    timer.startPeriodic(dt);
+
+    // Stepper motors
+    Stepper_Up.setup(STEPPER_UP_DIR_PIN, STEPPER_UP_PWM_PIN,
+                     0, &PWM_STEPPER_UP_TIMER,
+                     STEPPER_DEGREES_PER_STEP, dt);
+
+    Stepper_Rot.setup(STEPPER_ROT_DIR_PIN, STEPPER_ROT_PWM_PIN,
+                      1, &PWM_STEPPER_ROT_TIMER,
+                      STEPPER_DEGREES_PER_STEP, dt);
+
+    // BDC Motors
+    uint8_t spin_pins[2] = {SPIN_MOTOR_PIN_A, SPIN_MOTOR_PIN_B};
+    uint8_t spin_channels[2] = {2, 3};
+    MotorS.setup(spin_pins, spin_channels);
+    Buzz.setup(Buzz_PIN, GPO);
+    uint8_t pump_pins[2] = {PUMP_PIN_A, PUMP_PIN_B};
+    uint8_t pump_channels[2] = {4, 5};
+    Pump.setup(pump_pins, pump_channels);
+
+    // Encoder2
+    uint8_t encoder_pins[2] = {ENCODER_PIN_A, ENCODER_PIN_B};
+    enco.setup(encoder_pins, ENCODER_DEGREES_PER_EDGE);
+    RGB.setup(Pins_rgb, RGB_CH, &PWM_RGB, 1);
+
+    // PID controller
+    PID.setup(PID_GAINS, dt);
+
+    // Color sensor
+    Color_sensor.begin(I2C_NUM_0, 0x29);
+
+    // Emergency relay
+    emg_relay.setup(EMERGENCY_STOP_PIN, GPO);
+    emg_relay.set(0); // Initially not stopped
+
+    // Clear buffers
+
+    // ========================================================================
+    // PUMP TIMING VARIABLES
+    // ========================================================================
+    uint64_t pump_start_time = 0;
+    const uint64_t PUMP_DURATION_US = 3000000; // 3 seconds
+    bool pump_active = false;
+
+    // ========================================================================
+    // MOVEMENT REFERENCES
+    // ========================================================================
+    float target_up_degrees = 0.0f;
+    float target_rot_degrees = 0.0f;
+
+    printf("System initialized. Ready for commands.\n");
+
+    // ========================================================================
+    // MAIN LOOP
+    // ========================================================================
     while (1)
     {
-        // wait for timer tick
         if (timer.interruptAvailable())
         {
-            JOY.result();
-            if (JOY.Pressed())
+            // ================================================================
+            // 1. READ SENSORS
+            // ================================================================
+            telemetry.speed = enco.getSpeed();
+            telemetry.pos_x = Stepper_Rot.getPosition();
+            telemetry.pos_y = Stepper_Up.getPosition();
+
+            Color_sensor.readRaw(sensor_c, sensor_r, sensor_g, sensor_b);
+            telemetry.R = sensor_r;
+            telemetry.G = sensor_g;
+            telemetry.B = sensor_b;
+            // Referencias medidas (blanco / negro)
+            const float W_R = 2046.0f, W_G = 1969.0f, W_B = 1943.0f;
+            const float K_R = 190.0f, K_G = 143.0f, K_B = 100.0f;
+
+            // Lecturas crudas
+            float r_raw = (float)sensor_r;
+            float g_raw = (float)sensor_g;
+            float b_raw = (float)sensor_b;
+
+            // Mapeo lineal (clamp entre 0 y 1)
+            auto map01 = [](float v, float vmin, float vmax) -> float
             {
-                if (currentstate >= 9)
-                    currentstate = 0;
-                else
-                    currentstate++;
+                if (vmax <= vmin)
+                    return 0.0f;
+                float t = (v - vmin) / (vmax - vmin);
+                if (t < 0.0f)
+                    return 0.0f;
+                if (t > 1.0f)
+                    return 1.0f;
+                return t;
+            };
+
+            float rn = map01(r_raw, K_R, W_R);
+            float gn = map01(g_raw, K_G, W_G);
+            float bn = map01(b_raw, K_B, W_B);
+
+            // Escalar a 0-255 y asignar a telemetry (enteros)
+            telemetry.R = (int)(rn * 255.0f + 0.5f);
+            telemetry.G = (int)(gn * 255.0f + 0.5f);
+            telemetry.B = (int)(bn * 255.0f + 0.5f);
+            RGB.setColor(telemetry.R, telemetry.G, telemetry.B);
+            // ================================================================
+            // 2. RECEIVE UART COMMANDS
+            // ================================================================
+            int available = UART_MESSAGE.available();
+            if (available > 0)
+            {
+                UART_MESSAGE.read(rxbuf, available);
+
+                int parsed = sscanf(rxbuf, "%d,%f,%d,%d,%f,%f\n",
+                                    &current_state,
+                                    &control.ref_rpms,
+                                    &control.emergency_stop,
+                                    &control.send_water,
+                                    &control.ref_pos_x,
+                                    &control.ref_pos_y);
+                target_up_degrees = control.ref_pos_y;
+                target_rot_degrees = control.ref_pos_x;
+                printf("%d,%.2f,%d,%d,%.2f,%.2f\n",
+                       current_state,
+                       (double)control.ref_rpms,
+                       control.emergency_stop,
+                       control.send_water,
+                       (double)control.ref_pos_x,
+                       (double)control.ref_pos_y);
+                if (parsed >= 1)
+                {
+                    // Handle emergency stop immediately
+                    if (control.emergency_stop != 0)
+                    {
+                        emg_relay.set(1);
+                        MotorS.setSpeed(0.0f);
+                        Pump.setSpeed(0.0f);
+                        printf("EMERGENCY STOP ACTIVATED\n");
+                        current_state = STATE_IDLE;
+                    }
+                    else
+                    {
+                        emg_relay.set(0);
+                    }
+                }
+
+                memset(rxbuf, 0, sizeof(rxbuf));
             }
+            Stepper_Up.update();
+            Stepper_Rot.update();
+            // ================================================================
+            // 3. STATE MACHINE
 
-            float measured_rpm = enco.getSpeed();
-            currentRPM = measured_rpm * 0.17;
-            switch (currentstate)
+            // ================================================================
+            switch (current_state)
             {
-            case 0:
-                PWM_Stepper_ROT.setDuty(0.0f);
-                PWM_Stepper_UP.setDuty(0.0f);
-                Motor_spin.setSpeed(0.0f);
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Welcome");
-                break;
-
-            case 1:
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Place a Sample");
-                break;
-
-            case 2:
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Sample OK");
-                PWM_Stepper_ROT.setDuty(0.0f);
-                PWM_Stepper_UP.setDuty(0.0f);
-                Motor_spin.setSpeed(0.0f);
-                break;
-
-            case 3:
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-
-                lcd_send_string("Down cylinder");
-
-                if (JOY.zero())
+            case STATE_ELEVATION:
+                // Move stepper up
+                if (target_up_degrees != 0.0f)
                 {
-                    PWM_Stepper_ROT.setDuty(0.0f);
-                    PWM_Stepper_UP.setDuty(0.0f);
-                }
-                else if (JOY.Left())
-                {
-                    STEPPER_ROT_DIR.set(1);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Right())
-                {
-                    STEPPER_ROT_DIR.set(0);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Up())
-                {
-                    STEPPER_UP_DIR.set(1);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
-                }
-                else if (JOY.Down())
-                {
-                    STEPPER_UP_DIR.set(0);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
+                    Stepper_Up.moveDegrees(target_up_degrees);
                 }
                 break;
 
-            case 4:
-            {
-                PWM_Stepper_ROT.setDuty(0.0f);
-                PWM_Stepper_UP.setDuty(0.0f);
-                currentRPM = enco.getSpeed() * 0.17;
-                error = 180 - enco.getSpeed();
-
-                u = PID.computedU(error);
-                Motor_spin.setSpeed(u);
-                SB1 = IV.read(ADC_READ_RAW);
-
-                if (mu_sta < 1000)
+            case STATE_ROTATION:
+                // Rotate stepper
+                if (target_rot_degrees != 0.0f)
                 {
-                    mu_rel = 0.7688f * SB1 - 848.81f; //
-                    mu_acc += mu_rel;
-                    mu_sta++;
+                    Stepper_Rot.moveDegrees(target_rot_degrees);
                 }
-                printf("%f", mu_rel);
-                
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Measure");
-
-                lcd_put_cursor(1, 0);
-                current_time = esp_timer_get_time();
-                if (current_time - prev_time >= 250000)
-                {
-                    prev_time = current_time;
-                    sprintf(Buffer_message_1, "RPM: %.1f", currentRPM);
-                }
-                lcd_send_string(Buffer_message_1);
-                //
                 break;
+
+            case STATE_PUMP:
+                // Pump control with timing
+                if (control.send_water==1){
+                Pump.setSpeed(40.0);
             }
+            else 
+            Pump.setSpeed(0.0f);
 
-            case 5:
-            {
-                mu_tot = mu_acc / 100;
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                sprintf(Buffer_message_2, "VISCOSITY: %f", mu_rel);
-                lcd_send_string(Buffer_message_2);
-                Motor_spin.setSpeed(0.0f);
                 break;
-            }
 
-            case 6:
-            {
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Remove sample");
-                Motor_spin.setSpeed(0.0f);
-                mu_acc = 0;
-                mu_sta = 0;
-                break;
-            }
+            case STATE_VELOCITY_CONTROL:
+                // PID velocity control
+                {
+                    float error = control.ref_rpms - enco.getSpeed();
 
-            case 7:
-            {
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Clean Control");
-                if (JOY.zero())
-                {
-                    PWM_Stepper_ROT.setDuty(0.0f);
-                    PWM_Stepper_UP.setDuty(0.0f);
-                }
-                else if (JOY.Left())
-                {
-                    STEPPER_ROT_DIR.set(1);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Right())
-                {
-                    STEPPER_ROT_DIR.set(0);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Up())
-                {
-                    STEPPER_UP_DIR.set(1);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
-                }
-                else if (JOY.Down())
-                {
-                    STEPPER_UP_DIR.set(0);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
+                    float output = PID.computedU(error);
+
+                    MotorS.setSpeed(output);
                 }
                 break;
-            }
 
-            case 8:
-            {
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Dry Control");
-                if (JOY.zero())
-                {
-                    PWM_Stepper_ROT.setDuty(0.0f);
-                    PWM_Stepper_UP.setDuty(0.0f);
-                }
-                else if (JOY.Left())
-                {
-                    STEPPER_ROT_DIR.set(1);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Right())
-                {
-                    STEPPER_ROT_DIR.set(0);
-                    PWM_Stepper_ROT.setDuty(50.0f);
-                    PWM_Stepper_ROT.setFrequency(650);
-                }
-                else if (JOY.Up())
-                {
-                    STEPPER_UP_DIR.set(1);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
-                }
-                else if (JOY.Down())
-                {
-                    STEPPER_UP_DIR.set(0);
-                    PWM_Stepper_UP.setDuty(50.0f);
-                    PWM_Stepper_UP.setFrequency(650);
-                }
-                break;
-            }
-
-            case 9:
-            {
-                lcd_clear();
-                lcd_put_cursor(0, 0);
-                lcd_send_string("Process Complete");
-                Motor_spin.setSpeed(0.0f);
-                PWM_Stepper_ROT.setDuty(0.0f);
-                PWM_Stepper_UP.setDuty(0.0f);
-                break;
-            }
-
+            case STATE_IDLE:
             default:
+                Buzz.set(1);
+
                 break;
             }
 
-        } // switch
-        printf("%d,%f,%f,%f\n", currentstate, currentRPM, mu_rel,SB1);
-    }
+            // ================================================================
+            // 4. SEND TELEMETRY
+            // ================================================================
+            printf("%d,%d,%d,%.2f,%.2f,%.2f,%d\n",
+                   telemetry.R, telemetry.G, telemetry.B,
+                   telemetry.pos_x, telemetry.pos_y, telemetry.speed, emg_relay.get());
+
+        } // timer tick
+    } // while(1)
 }

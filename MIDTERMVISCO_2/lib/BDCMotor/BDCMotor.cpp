@@ -14,12 +14,16 @@ void BDCMotor::setSpeed(float Speed)
 {
     if (Speed >= 0)
     {
+        if(Speed>=100) 
+            Speed = 100;
         in[0].setDuty(Speed);  
         in[1].setDuty(0.0f);
         
     }
     else
     {
+        if (Speed<=-100) 
+            Speed = -100;
         in[1].setDuty(-1.0f*Speed);
         in[0].setDuty(0.0f);
     }

@@ -1,5 +1,5 @@
 #include "PID_CAYETANO.h"
-
+#include "SimpleGPIO.h"
 PID_CAYETANO::PID_CAYETANO()
 {
     integral = 0.0f;
@@ -18,47 +18,58 @@ void PID_CAYETANO::setup(float Gains[3], float dt_us)
 
 float PID_CAYETANO::computedU(float error)
 {
-    // Proportional term
-    float P = _Kp * error;
-    
-    // Derivative term
-    float D = _Kd * (error - prev_error) / _dt;
-    
-    // Trapezoidal integration
-    float error_avg = (error + prev_error) / 2.0f;
-    float integral_update = error_avg * _dt;
-    
-    // Calculate output with potential integral update
-    float u_test = P + D + _Ki * (integral + integral_update);
-    
-    // Anti-windup: only integrate if not saturated
-    if (u_test > 100.0f || u_test < -100.0f) {
-        // Saturated - conditional integration
-        if ((u_test > 100.0f && error < 0.0f) || 
-            (u_test < -100.0f && error > 0.0f)) {
-            // Integration would help reduce saturation
-            integral += integral_update;
-        }
-    } else {
-        // Not saturated - integrate normally
-        integral += integral_update;
+    // safety dt
+    if (_dt <= 0.0f) {
+        printf("PID ERROR: _dt <= 0 (%.9f)\n", _dt);
+        return 0.0f;
     }
-    
-    // Clamp integral to reasonable bounds
-    float integral_limit = 100.0f;
-    if (integral > integral_limit) integral = integral_limit;
-    if (integral < -integral_limit) integral = -integral_limit;
-    
-    // Calculate final output
+
+    // Proportional
+    float P = _Kp * error;
+
+    // Derivative
+    float D = _Kd * (error - prev_error) / _dt;
+
+    // Trapezoidal integration increment
+    float error_avg = (error + prev_error) * 0.5f;
+    float integral_update = error_avg * _dt;
+
+    // Tentative integral (do not commit yet)
+    float tentative_integral = integral + integral_update;
+
+    // tentative output using tentative_integral
+    float u_tentative = P + _Ki * tentative_integral + D;
+
+    // Anti-windup policy: integrate only if tentative output is inside limits
+    const float U_LIMIT = 100.0f;
+    if (u_tentative > -U_LIMIT && u_tentative < U_LIMIT) {
+        integral = tentative_integral; // commit integration
+    } else {
+        // don't integrate; optionally could slowly unwind integral
+        // integral *= 0.999f; // small leak if desired
+    }
+
+    // clamp integral to reasonable bounds
+    const float INTEGRAL_LIMIT = 100.0f;
+    if (integral > INTEGRAL_LIMIT) integral = INTEGRAL_LIMIT;
+    if (integral < -INTEGRAL_LIMIT) integral = -INTEGRAL_LIMIT;
+
+    // final output
     float u = P + _Ki * integral + D;
-    
-    // Clamp output
-    if (u > 100.0f) u = 100.0f;
-    if (u < -100.0f) u = -100.0f;
-    
+
+    // clamp output
+    if (u > U_LIMIT) u = U_LIMIT;
+    if (u < -U_LIMIT) u = -U_LIMIT;
+
+    // update previous error
     prev_error = error;
+
+    // debug print (comment later)
+    printf("PID dbg: e=%.4f P=%.4f I=%.4f(Dint) D=%.4f u_tent=%.4f u=%.4f\n",error, P, _Ki*integral, D, u_tentative, u);
+
     return u;
 }
+
 
 void PID_CAYETANO::reset()
 {

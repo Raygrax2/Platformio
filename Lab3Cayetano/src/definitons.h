@@ -35,9 +35,11 @@ SimpleUART UART(115200);
 
 // --- Buffers UART o debug ---
 char rxbuf[32];
+char rxbuf[32];
 uint8_t len = 0;
 
 // --- Parámetros del encoder ---
+uint8_t EncoderPIN[2] = {32, 14}; // Pines del encoder
 uint8_t EncoderPIN[2] = {32, 14}; // Pines del encoder
 uint8_t AIN[2] = {27, 26};
 uint8_t CHA[2] = {0, 1};
